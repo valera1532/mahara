@@ -694,11 +694,23 @@ body.is-loaded .preloader,
 }
 
 .hero-photo img {
-  width: 100%;
-  height: 100%;
+  --photo-mask:
+    linear-gradient(to right, transparent, rgba(0,0,0,.4) 6%, #000 18%, #000 82%, rgba(0,0,0,.4) 94%, transparent),
+    linear-gradient(to bottom, transparent, rgba(0,0,0,.5) 6%, #000 16%, #000 76%, rgba(0,0,0,.6) 88%, transparent);
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: auto;
+  height: auto;
+  max-height: 100%;
   object-fit: contain;
   object-position: bottom;
+  transform: translateX(-50%);
   filter: saturate(.92) contrast(1.05);
+  -webkit-mask-image: var(--photo-mask);
+  mask-image: var(--photo-mask);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
 }
 
 .hero-photo--left {
@@ -932,40 +944,6 @@ body.is-loaded .hero-reveal:nth-child(2) { transition-delay: .12s; }
 body.is-loaded .hero-reveal:nth-child(3) { transition-delay: .23s; }
 body.is-loaded .hero-reveal:nth-child(4) { transition-delay: .32s; }
 body.is-loaded .hero-reveal:nth-child(5) { transition-delay: .42s; }
-
-/* Marquee */
-.marquee {
-  position: relative;
-  z-index: 20;
-  overflow: hidden;
-  border-top: 1px solid rgba(255,255,255,.08);
-  border-bottom: 1px solid rgba(255,255,255,.08);
-  background: #080809;
-}
-
-.marquee__track {
-  width: max-content;
-  display: flex;
-  align-items: center;
-  gap: 28px;
-  padding: 18px 0;
-  color: #a6a09f;
-  font-size: .68rem;
-  font-weight: 650;
-  letter-spacing: .2em;
-  text-transform: uppercase;
-  animation: marqueeMove 25s linear infinite;
-}
-
-.marquee__track i {
-  color: var(--red);
-  font-style: normal;
-  font-size: .7rem;
-}
-
-@keyframes marqueeMove {
-  to { transform: translateX(-50%); }
-}
 
 /* Categories */
 .categories {
@@ -1379,29 +1357,86 @@ body.is-loaded .hero-reveal:nth-child(5) { transition-delay: .42s; }
 }
 
 .lookbook-slider {
+  --lookbook-gutter: max(32px, calc((100vw - var(--container)) / 2));
   display: flex;
   gap: 18px;
-  width: max-content;
-  min-width: 100%;
-  padding: 0 max(32px, calc((100vw - var(--container)) / 2));
+  width: 100%;
+  padding: 0 var(--lookbook-gutter) 8px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: var(--lookbook-gutter);
+  scrollbar-width: none;
   cursor: grab;
   user-select: none;
-  touch-action: pan-y;
+  touch-action: pan-x pan-y;
 }
 
-.lookbook-slider.is-dragging { cursor: grabbing; }
+.lookbook-slider::-webkit-scrollbar { display: none; }
+.lookbook-slider:focus-visible { outline: 2px solid var(--red); outline-offset: -2px; }
+.lookbook-slider.is-dragging { cursor: grabbing; scroll-snap-type: none; scroll-behavior: auto; }
 
 .lookbook-card {
   position: relative;
-  flex: 0 0 clamp(260px, 24vw, 390px);
+  flex: 0 0 clamp(260px, 28vw, 420px);
   height: 570px;
   overflow: hidden;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
   border-radius: var(--radius-sm);
   background: #151517;
 }
 
-.lookbook-card--wide { flex-basis: clamp(320px, 32vw, 510px); }
-.lookbook-card--tall { height: 650px; }
+.lookbook-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 28px;
+}
+
+.lookbook-arrow {
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  font-size: 1.4rem;
+  transition: border-color .25s, color .25s, opacity .25s;
+}
+
+.lookbook-arrow:hover:not(:disabled) { border-color: var(--red); color: var(--red-bright); }
+.lookbook-arrow:disabled { opacity: .3; cursor: default; }
+
+.lookbook-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.lookbook-pagination button {
+  width: 32px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+}
+
+.lookbook-pagination button::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #62575a;
+  transition: width .25s var(--ease), background .25s;
+}
+
+.lookbook-pagination button[aria-current="true"]::before { width: 24px; background: var(--red); }
+.lookbook-arrow:focus-visible,
+.lookbook-pagination button:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
 
 .lookbook-card img {
   width: 100%;
@@ -1510,6 +1545,19 @@ body.is-loaded .hero-reveal:nth-child(5) { transition-delay: .42s; }
   letter-spacing: .12em;
   text-align: center;
   transform: rotate(9deg);
+}
+
+.story__copy {
+  min-width: 0;
+  container-type: inline-size;
+}
+
+.story__copy h2 {
+  font-size: clamp(2rem, 3.9vw, 4.75rem);
+  font-size: clamp(2rem, 10.5cqw, 4.75rem);
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
 }
 
 .story__lead {
@@ -2347,6 +2395,7 @@ body.cursor-hover .cursor-ring { width: 54px; height: 54px; background: rgba(241
   .story__grid { grid-template-columns: 1fr; }
   .story__visual { min-height: 680px; }
   .story__copy { max-width: 720px; }
+  .lookbook-slider { --lookbook-gutter: 19px; }
   .site-footer__top { grid-template-columns: 1fr; }
   .footer-links { max-width: 700px; }
   .catalog-hero__grid { grid-template-columns: 1fr; }
@@ -2444,7 +2493,6 @@ body.cursor-hover .cursor-ring { width: 54px; height: 54px; background: rgba(241
   .section-heading { margin-bottom: 35px; }
   .section-heading--row .button { justify-self: start; }
   .section-heading h2,
-  .story__copy h2,
   .newsletter h2,
   .campaign h2 {
     font-size: clamp(2.75rem, 13vw, 4.2rem);
@@ -2489,10 +2537,8 @@ body.cursor-hover .cursor-ring { width: 54px; height: 54px; background: rgba(241
   .campaign h2 { font-size: clamp(3.2rem, 14vw, 5rem); }
   .campaign__content > p:not(.eyebrow) { font-size: .85rem; }
   .campaign__caption { left: 16px; right: 16px; font-size: .52rem; }
-  .lookbook-slider { gap: 12px; padding-inline: 16px; }
-  .lookbook-card,
-  .lookbook-card--wide { flex-basis: 74vw; height: 490px; }
-  .lookbook-card--tall { height: 550px; }
+  .lookbook-slider { --lookbook-gutter: 16px; gap: 12px; }
+  .lookbook-card { flex-basis: 78vw; height: 490px; }
   .story__grid { gap: 52px; }
   .story__visual { min-height: 530px; }
   .story__picture--main { width: 76%; height: 82%; }

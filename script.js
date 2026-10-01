@@ -13,7 +13,7 @@
       altImage: 'assets/images/black-hoodie-woman.webp',
       label: 'New drop',
       sizes: ['S', 'M', 'L', 'XL', 'XXL'],
-      description: 'Чёрное худи свободного кроя из плотного хлопка. Авторская вышивка с архитектурными символами, мягкая изнанка и глубокий капюшон.'
+      description: 'Чёрное худи свободного кроя из плотного хлопка; авторская вышивка с архитектурными символами, мягкая изнанка и глубокий капюшон'
     },
     {
       id: 'hoodie-green',
@@ -26,7 +26,7 @@
       altImage: 'assets/images/green-hoodie-back.webp',
       label: 'New drop',
       sizes: ['S', 'M', 'L', 'XL', 'XXL'],
-      description: 'Тёмно-зелёное худи с вышивкой по всей поверхности. Плотная ткань держит форму, а объёмный силуэт подходит для многослойных образов.'
+      description: 'Тёмно-зелёное худи с вышивкой по всей поверхности; плотная ткань держит форму, а объёмный силуэт подходит для многослойных образов'
     },
     {
       id: 'tee-slate',
@@ -39,7 +39,7 @@
       altImage: 'assets/images/slate-tee-back.webp',
       label: 'New drop',
       sizes: ['S', 'M', 'L', 'XL', 'XXL'],
-      description: 'Футболка из плотного хлопка со свободной посадкой и небольшой вышивкой с российскими архитектурными мотивами.'
+      description: 'Футболка из плотного хлопка со свободной посадкой и небольшой вышивкой с российскими архитектурными мотивами'
     },
     {
       id: 'tee-burgundy',
@@ -52,7 +52,7 @@
       altImage: 'assets/images/burgundy-tee.webp',
       label: 'Bestseller',
       sizes: ['S', 'M', 'L', 'XL'],
-      description: 'Бордовая футболка с крупным арт-принтом. Плотный хлопок, свободный силуэт и изображение, которое считывается как самостоятельное высказывание.'
+      description: 'Бордовая футболка с крупным арт-принтом; плотный хлопок, свободный силуэт и изображение, которое считывается как самостоятельное высказывание'
     },
     {
       id: 'tee-white',
@@ -65,7 +65,7 @@
       altImage: 'assets/images/green-tee-close.webp',
       label: 'New drop',
       sizes: ['S', 'M', 'L', 'XL'],
-      description: 'Белая футболка с контрастным арт-принтом, плотным воротом и свободной посадкой. Базовый цвет делает графику главным акцентом.'
+      description: 'Белая футболка с контрастным арт-принтом, плотным воротом и свободной посадкой; базовый цвет делает графику главным акцентом'
     },
     {
       id: 'tee-black',
@@ -78,7 +78,7 @@
       altImage: 'assets/images/white-last-supper.webp',
       label: 'Limited',
       sizes: ['M', 'L', 'XL', 'XXL'],
-      description: 'Чёрная футболка из плотного хлопка с крупным принтом. Лимитированная модель из текущего дропа.'
+      description: 'Чёрная футболка из плотного хлопка с крупным принтом; лимитированная модель из текущего дропа'
     },
     {
       id: 'tee-green',
@@ -91,7 +91,7 @@
       altImage: 'assets/images/green-tee-seated.webp',
       label: 'New color',
       sizes: ['S', 'M', 'L', 'XL'],
-      description: 'Глубокий зелёный оттенок, свободная посадка и крупный арт-принт. Футболка работает и как акцент, и как часть спокойного образа.'
+      description: 'Глубокий зелёный оттенок, свободная посадка и крупный арт-принт; футболка работает и как акцент, и как часть спокойного образа'
     },
     {
       id: 'hoodie-black-female',
@@ -104,7 +104,7 @@
       altImage: 'assets/images/black-hoodie.webp',
       label: 'Unisex',
       sizes: ['XS', 'S', 'M', 'L', 'XL'],
-      description: 'Унисекс-худи с расслабленной посадкой, объёмным капюшоном и вышивкой по всей поверхности. Хорошо сидит на разном типе фигуры.'
+      description: 'Унисекс-худи с расслабленной посадкой, объёмным капюшоном и вышивкой по всей поверхности; хорошо сидит на разном типе фигуры'
     }
   ];
 
@@ -272,7 +272,7 @@
           <img src="${product.image}" alt="${product.title}" />
           <div class="cart-item__copy">
             <strong>${product.title}</strong>
-            <span>Размер ${item.size} · ${item.qty} шт.</span>
+            <span>Размер ${item.size} · ${item.qty} шт</span>
             <b>${formatPrice(product.price * item.qty)}</b>
           </div>
           <button class="cart-item__remove" type="button" data-cart-remove="${index}" aria-label="Удалить">×</button>
@@ -488,27 +488,147 @@
     });
   }
 
-  function setupDragScroll() {
-    $$('[data-drag-scroll]').forEach(slider => {
-      let down = false;
-      let startX = 0;
-      let scrollLeft = 0;
-      slider.addEventListener('pointerdown', event => {
-        down = true;
-        startX = event.clientX;
-        scrollLeft = slider.scrollLeft;
-        slider.classList.add('is-dragging');
-        slider.setPointerCapture?.(event.pointerId);
+  function setupLookbook() {
+    const slider = $('[data-lookbook-slider]');
+    if (!slider) return;
+
+    const cards = $$('.lookbook-card', slider);
+    const previous = $('[data-lookbook-prev]');
+    const next = $('[data-lookbook-next]');
+    const pagination = $('[data-lookbook-pagination]');
+    if (!cards.length || !previous || !next || !pagination) return;
+
+    const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+    let stops = [0];
+    let maxScroll = 0;
+    let requestedIndex = null;
+    let mouseDrag = null;
+    let scrollFrame = 0;
+    let resizeFrame = 0;
+    let scrollTimer;
+
+    const nearestIndex = () => stops.reduce((nearest, stop, index) =>
+      Math.abs(stop - slider.scrollLeft) < Math.abs(stops[nearest] - slider.scrollLeft) ? index : nearest, 0);
+
+    const syncControls = () => {
+      const active = nearestIndex();
+      previous.disabled = slider.scrollLeft <= 1;
+      next.disabled = slider.scrollLeft >= maxScroll - 1;
+      $$('.lookbook-pagination__dot', pagination).forEach((dot, index) => {
+        dot.classList.toggle('is-active', index === active);
+        if (index === active) dot.setAttribute('aria-current', 'true');
+        else dot.removeAttribute('aria-current');
       });
-      slider.addEventListener('pointermove', event => {
-        if (!down) return;
-        slider.scrollLeft = scrollLeft - (event.clientX - startX) * 1.25;
+    };
+
+    const goTo = index => {
+      requestedIndex = Math.max(0, Math.min(index, stops.length - 1));
+      slider.scrollTo({ left: stops[requestedIndex], behavior: reducedMotion.matches ? 'auto' : 'smooth' });
+      syncControls();
+    };
+
+    const finishScroll = () => {
+      requestedIndex = null;
+      syncControls();
+    };
+
+    const measure = () => {
+      const gutter = parseFloat(getComputedStyle(slider).paddingLeft) || 0;
+      const origin = slider.getBoundingClientRect().left + slider.clientLeft;
+      maxScroll = Math.max(0, slider.scrollWidth - slider.clientWidth);
+      const measured = [0];
+      cards.forEach(card => {
+        const offset = card.getBoundingClientRect().left - origin + slider.scrollLeft - gutter;
+        const target = Math.max(0, Math.min(offset, maxScroll));
+        if (target - measured[measured.length - 1] > 1) measured.push(target);
       });
-      const finish = () => { down = false; slider.classList.remove('is-dragging'); };
-      slider.addEventListener('pointerup', finish);
-      slider.addEventListener('pointercancel', finish);
-      slider.addEventListener('pointerleave', finish);
+      if (maxScroll - measured[measured.length - 1] > 1) measured.push(maxScroll);
+      else measured[measured.length - 1] = maxScroll;
+      stops = measured;
+      requestedIndex = null;
+
+      if (pagination.children.length !== stops.length) {
+        const focusedIndex = Array.from(pagination.children).indexOf(document.activeElement);
+        pagination.replaceChildren(...stops.map((stop, index) => {
+          const dot = document.createElement('button');
+          dot.className = 'lookbook-pagination__dot';
+          dot.type = 'button';
+          dot.dataset.lookbookPosition = index;
+          dot.setAttribute('aria-label', `Позиция ${index + 1} из ${stops.length}`);
+          dot.setAttribute('aria-controls', slider.id);
+          return dot;
+        }));
+        if (focusedIndex >= 0) pagination.children[Math.min(focusedIndex, stops.length - 1)].focus({ preventScroll: true });
+      }
+
+      slider.scrollTo({ left: stops[nearestIndex()], behavior: 'auto' });
+      syncControls();
+    };
+
+    const scheduleMeasure = () => {
+      cancelAnimationFrame(resizeFrame);
+      resizeFrame = requestAnimationFrame(measure);
+    };
+
+    previous.addEventListener('click', () => goTo((requestedIndex ?? nearestIndex()) - 1));
+    next.addEventListener('click', () => goTo((requestedIndex ?? nearestIndex()) + 1));
+    pagination.addEventListener('click', event => {
+      const dot = event.target.closest('[data-lookbook-position]');
+      if (dot) goTo(Number(dot.dataset.lookbookPosition));
     });
+
+    slider.addEventListener('keydown', event => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      event.preventDefault();
+      goTo((requestedIndex ?? nearestIndex()) + (event.key === 'ArrowRight' ? 1 : -1));
+    });
+
+    slider.addEventListener('scroll', () => {
+      if (!scrollFrame) scrollFrame = requestAnimationFrame(() => {
+        scrollFrame = 0;
+        syncControls();
+      });
+      clearTimeout(scrollTimer);
+      scrollTimer = setTimeout(finishScroll, 160);
+    }, { passive: true });
+    slider.addEventListener('scrollend', finishScroll);
+    slider.addEventListener('wheel', () => { requestedIndex = null; }, { passive: true });
+
+    slider.addEventListener('pointerdown', event => {
+      requestedIndex = null;
+      if (event.pointerType !== 'mouse' || event.button !== 0) return;
+      mouseDrag = { pointerId: event.pointerId, startX: event.clientX, startScroll: slider.scrollLeft, moved: false };
+      slider.setPointerCapture(event.pointerId);
+      slider.focus({ preventScroll: true });
+    });
+
+    slider.addEventListener('pointermove', event => {
+      if (!mouseDrag || event.pointerId !== mouseDrag.pointerId) return;
+      const distance = event.clientX - mouseDrag.startX;
+      if (!mouseDrag.moved && Math.abs(distance) <= 5) return;
+      mouseDrag.moved = true;
+      slider.classList.add('is-dragging');
+      event.preventDefault();
+      slider.scrollLeft = Math.max(0, Math.min(mouseDrag.startScroll - distance, maxScroll));
+    });
+
+    const finishDrag = event => {
+      if (!mouseDrag || event.pointerId !== mouseDrag.pointerId) return;
+      const moved = mouseDrag.moved;
+      mouseDrag = null;
+      const target = nearestIndex();
+      slider.classList.remove('is-dragging');
+      if (slider.hasPointerCapture(event.pointerId)) slider.releasePointerCapture(event.pointerId);
+      if (moved) goTo(target);
+    };
+    slider.addEventListener('pointerup', finishDrag);
+    slider.addEventListener('pointercancel', finishDrag);
+    slider.addEventListener('lostpointercapture', finishDrag);
+    slider.addEventListener('dragstart', event => event.preventDefault());
+
+    window.addEventListener('resize', scheduleMeasure, { passive: true });
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(scheduleMeasure).observe(slider);
+    measure();
   }
 
   function setupNewsletter() {
@@ -654,7 +774,7 @@
   observeReveals();
   setupHeroParallax();
   setupMagnetic();
-  setupDragScroll();
+  setupLookbook();
   setupNewsletter();
   setupCustomCursor();
   setupImageHoverSwap();
