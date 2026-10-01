@@ -47,18 +47,28 @@
   </aside>
 
   <main class="catalog-main">
-    <section class="catalog-hero">
-      <div class="container catalog-hero__grid">
-        <div class="catalog-hero__intro reveal is-visible">
-          <p class="breadcrumbs"><a href="index.html">Главная</a><span>/</span>Каталог</p>
-          <p class="eyebrow">Collection / 2026</p>
-          <h1>Каталог</h1>
-          <p>Авторская вышивка, арт‑принты и свободная посадка<br>Вещи из текущего дропа</p>
+    <section class="catalog-hero" aria-labelledby="catalog-title">
+      <div class="container">
+        <nav class="breadcrumbs" aria-label="Хлебные крошки"><a href="index.html">Главная</a><span aria-hidden="true">/</span><span aria-current="page">Каталог</span></nav>
+        <div class="catalog-hero__grid">
+          <div class="catalog-hero__intro reveal is-visible">
+            <p class="eyebrow">Каталог MAHARA / 2026</p>
+            <h1 id="catalog-title">Вещи<br><em>с характером</em></h1>
+            <p class="catalog-hero__description">Авторская вышивка, плотный хлопок и свободный силуэт для города</p>
+            <div class="catalog-hero__actions">
+              <a class="button button--primary" href="#catalog-products" data-filter-category="all"><span>Смотреть вещи</span><i aria-hidden="true">↘</i></a>
+              <nav class="catalog-hero__categories" aria-label="Выбрать категорию">
+                <a href="#catalog-products" data-filter-category="hoodie">Худи <span aria-hidden="true">↗</span></a>
+                <a href="#catalog-products" data-filter-category="tee">Футболки <span aria-hidden="true">↗</span></a>
+              </nav>
+            </div>
+            <div class="catalog-hero__signature"><span>Made in Russia</span><span>Малые тиражи / Свой почерк</span></div>
+          </div>
+          <figure class="catalog-hero__visual reveal is-visible">
+            <img src="assets/images/green-hoodie-back.webp" alt="Зелёное худи MAHARA с авторской вышивкой, вид со спины" width="853" height="1280" fetchpriority="high" />
+            <figcaption><span>Детали решают</span><span>MAHARA / Embroidery</span></figcaption>
+          </figure>
         </div>
-        <a class="catalog-banner reveal is-visible" href="#catalog-products">
-          <div class="catalog-banner__copy"><span>New drop</span><h2>Russian<br>Icons</h2><p>Новая коллекция уже в каталоге</p><b>Смотреть →</b></div>
-          <div class="catalog-banner__photos"><img src="assets/images/hero-man.webp" alt="Чёрное худи MAHARA" /><img src="assets/images/hero-woman.webp" alt="Чёрное худи MAHARA" /><img src="assets/images/hero-green-back.webp" alt="Зелёное худи MAHARA" /></div>
-        </a>
       </div>
     </section>
 
