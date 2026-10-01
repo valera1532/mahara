@@ -1,0 +1,11 @@
+Generated with the built-in ImageGen tool from the user's supplied MAHARA logo reference.
+Transparent background: true
+
+Use case: logo-brand
+Asset type: regenerated brand emblem for the right-hand hero panel of the MAHARA clothing catalogue
+Input image 1: reference image, defining the exact emblem identity, silhouette, lettering and composition
+Primary request: Re-render this MAHARA emblem in crisp high resolution with a refined, restrained crimson-red enamel relief finish. Faithfully retain its recognizable architecture: the open onion cupola on the left, tall diagonally hatched spire on the right, pointed finials and the little arched doorway. Do not reinvent the symbol. Preserve the logo proportions, two-part architecture and placement of all lettering. Gentle bevelled highlights, very subtle three-dimensional depth, rich red surfaces, clean edges, premium understated finish. The symbol must remain instantly readable at website size.
+Text verbatim: "MAHARA" in thin widely spaced uppercase sans-serif on one line below the symbol; "MADE IN RUSSIA" in smaller uppercase on one line below that. Spell MAHARA exactly M-A-H-A-R-A.
+Composition: square high-resolution transparent PNG cutout; complete emblem and both lines centered as one vertical lockup, generous 12% empty margins on every side, no cropping. Symbol and both text lines in crimson red with a few gentle red highlights.
+Background: genuinely transparent alpha, no charcoal or grey rectangular backdrop, no floor or scene. Any shadows are subtle and confined to the emblem itself.
+Avoid: extra symbols, extra letters, additional text, border, watermark, mockup, clothing, people, large glow baked into the transparent area, heavy metallic gold/silver effects. This is the final standalone graphic asset, not a screenshot of a website.

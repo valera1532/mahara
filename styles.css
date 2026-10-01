@@ -2146,36 +2146,70 @@ body.is-loaded .hero-reveal:nth-child(5) { transition-delay: .42s; }
   background: #242321;
 }
 
-.catalog-hero__visual img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center 12%;
-  filter: saturate(.8) contrast(1.03);
+.catalog-hero__visual--emblem {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  place-items: center;
+  isolation: isolate;
+  border: 0;
+  border-radius: 0;
+  background: radial-gradient(ellipse at 50% 48%, rgba(82,0,14,.12), transparent 70%);
 }
 
-.catalog-hero__visual::after {
+.catalog-hero__visual--emblem::before {
   content: "";
   position: absolute;
-  inset: 45% 0 0;
+  z-index: 0;
+  inset: 8% 2%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(216,22,49,.2), rgba(152,0,24,.08) 38%, transparent 70%);
+  opacity: .65;
   pointer-events: none;
-  background: linear-gradient(to top, rgba(0,0,0,.8), transparent);
+  animation: catalogEmblemGlow 7s ease-in-out infinite;
 }
 
-.catalog-hero__visual figcaption {
+.catalog-hero__visual--emblem::after {
+  content: "";
   position: absolute;
+  z-index: 2;
+  inset: -20% -15%;
+  background: linear-gradient(90deg, transparent 35%, rgba(255,164,180,.16) 50%, transparent 65%);
+  filter: blur(20px);
+  opacity: 0;
+  pointer-events: none;
+  animation: catalogEmblemLight 9s ease-in-out infinite;
+}
+
+.catalog-hero__emblem {
+  position: relative;
   z-index: 1;
-  inset: auto 24px 22px;
-  display: flex;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding-top: 16px;
-  border-top: 1px solid rgba(255,255,255,.28);
-  color: #e5e0db;
-  font-size: .6rem;
-  letter-spacing: .15em;
-  text-transform: uppercase;
+  width: 94%;
+  height: 94%;
+  min-width: 0;
+  min-height: 0;
+  object-fit: contain;
+  object-position: center;
+  filter: drop-shadow(0 0 22px rgba(234,20,47,.16));
+  transform-origin: center;
+  will-change: transform;
+  animation: catalogEmblemFloat 7s ease-in-out infinite;
+}
+
+@keyframes catalogEmblemFloat {
+  0%, 100% { transform: translateY(6px) rotate(-1deg); }
+  50% { transform: translateY(-6px) rotate(1deg); }
+}
+
+@keyframes catalogEmblemGlow {
+  0%, 100% { opacity: .55; transform: scale(.94); }
+  50% { opacity: .85; transform: scale(1.06); }
+}
+
+@keyframes catalogEmblemLight {
+  0%, 20% { opacity: 0; transform: translateX(-70%) rotate(-12deg); }
+  45% { opacity: .3; }
+  70%, 100% { opacity: 0; transform: translateX(70%) rotate(-12deg); }
 }
 
 .catalog-products {
@@ -2601,7 +2635,6 @@ body.cursor-hover .cursor-ring { width: 54px; height: 54px; background: rgba(241
   .catalog-hero__signature { margin-top: 26px; font-size: .52rem; letter-spacing: .1em; }
   .catalog-hero__signature span:first-child { padding-right: 16px; }
   .catalog-hero__visual { width: 100%; height: auto; aspect-ratio: 1.5; }
-  .catalog-hero__visual figcaption { inset: auto 16px 16px; font-size: .5rem; letter-spacing: .08em; }
   .catalog-products { padding-top: 25px; }
   .catalog-toolbar { height: 62px; min-height: 62px; }
   .catalog-tabs { display: none; }
@@ -2657,6 +2690,12 @@ body.cursor-hover .cursor-ring { width: 54px; height: 54px; background: rgba(241
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .catalog-hero__emblem,
+  .catalog-hero__visual--emblem::before,
+  .catalog-hero__visual--emblem::after {
+    animation: none !important;
+  }
+  .catalog-hero__emblem { transform: none; will-change: auto; }
   *,
   *::before,
   *::after {
