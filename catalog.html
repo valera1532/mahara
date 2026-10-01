@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#050505" />
+  <meta name="description" content="Каталог одежды MAHARA." />
+  <title>Каталог — MAHARA</title>
+  <link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="page-catalog">
+  <div class="site-noise" aria-hidden="true"></div>
+  <div class="cursor-dot" aria-hidden="true"></div>
+  <div class="cursor-ring" aria-hidden="true"></div>
+
+  <header class="site-header site-header--solid" data-header>
+    <a class="brand" href="index.html" aria-label="MAHARA — на главную">
+      <svg class="brand__icon" viewBox="0 0 64 64" aria-hidden="true"><path d="M14 50V32l8-8 5 5V17l5-7 5 7v12l5-5 8 8v18M8 50h48M22 50V35M32 50V21M42 50V35" /></svg>
+      <span>MAHARA</span>
+    </a>
+    <nav class="desktop-nav" aria-label="Основная навигация">
+      <a class="is-active" href="catalog.html">Каталог</a>
+      <a href="catalog.html?category=hoodie">Худи</a>
+      <a href="catalog.html?category=tee">Футболки</a>
+      <a href="index.html#lookbook">Lookbook</a>
+      <a href="index.html#story">О бренде</a>
+    </nav>
+    <div class="header-actions">
+      <button class="icon-button search-trigger" type="button" aria-label="Поиск"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg></button>
+      <button class="icon-button desktop-only" type="button" aria-label="Личный кабинет"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 21c.6-4.2 3.1-6.4 7-6.4s6.4 2.2 7 6.4"/></svg></button>
+      <button class="icon-button cart-trigger" type="button" aria-label="Корзина"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1 13H6L5 8Z"/><path d="M9 9V6a3 3 0 0 1 6 0v3"/></svg><span class="cart-count" data-cart-count>0</span></button>
+      <button class="menu-toggle" type="button" data-menu-toggle aria-label="Открыть меню" aria-expanded="false"><span></span><span></span></button>
+    </div>
+  </header>
+
+  <aside class="mobile-menu" data-mobile-menu aria-hidden="true">
+    <div class="mobile-menu__glow"></div>
+    <nav aria-label="Мобильная навигация">
+      <a href="catalog.html"><span>01</span>Каталог</a>
+      <a href="catalog.html?category=hoodie"><span>02</span>Худи</a>
+      <a href="catalog.html?category=tee"><span>03</span>Футболки</a>
+      <a href="index.html#lookbook"><span>04</span>Lookbook</a>
+      <a href="index.html#story"><span>05</span>О бренде</a>
+    </nav>
+    <div class="mobile-menu__meta"><span>Made in Russia</span><a href="mailto:hello@mahara.ru">hello@mahara.ru</a></div>
+  </aside>
+
+  <main class="catalog-main">
+    <section class="catalog-hero">
+      <div class="container catalog-hero__grid">
+        <div class="catalog-hero__intro reveal is-visible">
+          <p class="breadcrumbs"><a href="index.html">Главная</a><span>/</span>Каталог</p>
+          <p class="eyebrow">Collection / 2026</p>
+          <h1>Каталог</h1>
+          <p>Авторская вышивка, арт‑принты и свободная посадка. Вещи из текущего дропа.</p>
+        </div>
+        <a class="catalog-banner reveal is-visible" href="#catalog-products">
+          <div class="catalog-banner__copy"><span>New drop</span><h2>Russian<br>Icons</h2><p>Новая коллекция уже в каталоге</p><b>Смотреть →</b></div>
+          <div class="catalog-banner__photos"><img src="assets/images/hero-man.webp" alt="Чёрное худи MAHARA" /><img src="assets/images/hero-woman.webp" alt="Чёрное худи MAHARA" /><img src="assets/images/hero-green-back.webp" alt="Зелёное худи MAHARA" /></div>
+        </a>
+      </div>
+    </section>
+
+    <section class="catalog-products section" id="catalog-products">
+      <div class="container">
+        <div class="catalog-toolbar">
+          <div class="catalog-tabs" role="tablist" aria-label="Категории">
+            <button class="is-active" type="button" data-filter-category="all">Все товары</button>
+            <button type="button" data-filter-category="hoodie">Худи</button>
+            <button type="button" data-filter-category="tee">Футболки</button>
+          </div>
+          <button class="mobile-filter-trigger" type="button" data-filter-open><span>Фильтры</span><i>2</i></button>
+          <label class="catalog-sort">Сортировать:
+            <select data-sort>
+              <option value="new">По новинкам</option>
+              <option value="price-asc">Сначала дешевле</option>
+              <option value="price-desc">Сначала дороже</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="filter-panel" data-filter-panel>
+          <div class="filter-panel__header"><strong>Фильтры</strong><button type="button" data-filter-close>×</button></div>
+          <div class="filter-group"><span>Категория</span><div class="chip-group"><button class="is-active" data-filter-category="all">Все</button><button data-filter-category="hoodie">Худи</button><button data-filter-category="tee">Футболки</button></div></div>
+          <div class="filter-group"><span>Размер</span><div class="chip-group"><button data-size="S">S</button><button data-size="M">M</button><button data-size="L">L</button><button data-size="XL">XL</button><button data-size="XXL">XXL</button></div></div>
+          <div class="filter-group"><span>Цвет</span><div class="color-group"><button data-color="black" aria-label="Чёрный" style="--swatch:#151515"></button><button data-color="green" aria-label="Зелёный" style="--swatch:#0d4434"></button><button data-color="slate" aria-label="Серо-синий" style="--swatch:#58616c"></button><button data-color="white" aria-label="Белый" style="--swatch:#eee"></button><button data-color="burgundy" aria-label="Бордовый" style="--swatch:#7c1730"></button></div></div>
+          <button class="filter-reset" type="button" data-filter-reset>Сбросить всё</button>
+        </div>
+
+        <div class="catalog-results-meta"><span data-results-count>0 товаров</span><span>Hover — быстрый просмотр</span></div>
+        <div class="catalog-grid" data-product-grid="catalog"></div>
+        <div class="catalog-empty" data-catalog-empty><h2>Ничего не найдено</h2><p>Попробуйте сбросить фильтры.</p><button type="button" data-filter-reset>Сбросить фильтры</button></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container site-footer__top"><a class="footer-brand" href="index.html">MAHARA <small>MADE IN RUSSIA</small></a><div class="footer-links"><div><span>Shop</span><a href="catalog.html">Каталог</a><a href="catalog.html?category=hoodie">Худи</a><a href="catalog.html?category=tee">Футболки</a></div><div><span>Info</span><a href="index.html#story">О бренде</a><a href="#">Доставка и оплата</a><a href="#">Обмен и возврат</a></div><div><span>Social</span><a href="#">Telegram</a><a href="#">VK</a><a href="#">Instagram*</a></div></div></div>
+    <div class="container site-footer__bottom"><span>© 2026 MAHARA</span><span>Сделано в России</span><span>*Прототип сайта</span></div>
+  </footer>
+
+  <div class="search-panel" data-search-panel aria-hidden="true"><button class="search-panel__close" type="button" data-search-close aria-label="Закрыть поиск">×</button><form class="search-panel__form" action="catalog.html"><label for="site-search">Что вы ищете?</label><div><input id="site-search" name="q" type="search" placeholder="Например, зелёное худи" autocomplete="off" /><button type="submit">Найти →</button></div></form></div>
+  <div class="drawer-overlay" data-drawer-overlay></div>
+  <aside class="cart-drawer" data-cart-drawer aria-hidden="true"><div class="cart-drawer__header"><div><span>Корзина</span><small data-cart-caption>0 товаров</small></div><button type="button" class="cart-close" aria-label="Закрыть корзину">×</button></div><div class="cart-items" data-cart-items></div><div class="cart-empty" data-cart-empty><span>Корзина пока пуста</span><p>Добавьте вещь из нового дропа.</p><a href="catalog.html">Открыть каталог →</a></div><div class="cart-drawer__footer" data-cart-footer><div><span>Итого</span><strong data-cart-total>0 ₽</strong></div><button type="button">Перейти к оформлению <i>→</i></button><small>Доставка рассчитывается при оформлении.</small></div></aside>
+  <div class="quick-view" data-quick-view aria-hidden="true"><button class="quick-view__close" type="button" aria-label="Закрыть">×</button><div class="quick-view__media"><img src="" alt="" data-quick-image /></div><div class="quick-view__content"><p class="eyebrow" data-quick-label>New drop</p><h2 data-quick-title></h2><p class="quick-view__description" data-quick-description></p><strong class="quick-view__price" data-quick-price></strong><div class="quick-view__sizes"><span>Размер</span><div data-quick-sizes></div></div><button class="button button--primary quick-add" type="button"><span>Добавить в корзину</span><i>→</i></button></div></div>
+  <div class="toast" data-toast role="status" aria-live="polite"></div>
+  <script src="script.js"></script>
+</body>
+</html>

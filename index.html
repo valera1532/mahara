@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#050505" />
+  <meta name="description" content="MAHARA — премиальная уличная одежда, созданная в России." />
+  <title>MAHARA — Made in Russia</title>
+  <link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml" />
+  <script>document.documentElement.classList.add("js")</script>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="page-home">
+  <div class="site-noise" aria-hidden="true"></div>
+  <div class="cursor-dot" aria-hidden="true"></div>
+  <div class="cursor-ring" aria-hidden="true"></div>
+
+  <div class="preloader" data-preloader aria-hidden="true">
+    <div class="preloader__mark">
+      <span>MAHARA</span>
+      <small>MADE IN RUSSIA</small>
+    </div>
+    <div class="preloader__line"><i></i></div>
+  </div>
+
+  <header class="site-header" data-header>
+    <a class="brand" href="index.html" aria-label="MAHARA — на главную">
+      <svg class="brand__icon" viewBox="0 0 64 64" aria-hidden="true">
+        <path d="M14 50V32l8-8 5 5V17l5-7 5 7v12l5-5 8 8v18M8 50h48M22 50V35M32 50V21M42 50V35" />
+      </svg>
+      <span>MAHARA</span>
+    </a>
+
+    <nav class="desktop-nav" aria-label="Основная навигация">
+      <a href="catalog.html">Каталог</a>
+      <a href="#hoodies">Худи</a>
+      <a href="#tshirts">Футболки</a>
+      <a href="#lookbook">Lookbook</a>
+      <a href="#story">О бренде</a>
+    </nav>
+
+    <div class="header-actions">
+      <button class="icon-button search-trigger" type="button" aria-label="Поиск">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
+      </button>
+      <button class="icon-button desktop-only" type="button" aria-label="Личный кабинет">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 21c.6-4.2 3.1-6.4 7-6.4s6.4 2.2 7 6.4"/></svg>
+      </button>
+      <button class="icon-button cart-trigger" type="button" aria-label="Корзина">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1 13H6L5 8Z"/><path d="M9 9V6a3 3 0 0 1 6 0v3"/></svg>
+        <span class="cart-count" data-cart-count>0</span>
+      </button>
+      <button class="menu-toggle" type="button" data-menu-toggle aria-label="Открыть меню" aria-expanded="false">
+        <span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <aside class="mobile-menu" data-mobile-menu aria-hidden="true">
+    <div class="mobile-menu__glow"></div>
+    <nav aria-label="Мобильная навигация">
+      <a href="catalog.html"><span>01</span>Каталог</a>
+      <a href="#hoodies"><span>02</span>Худи</a>
+      <a href="#tshirts"><span>03</span>Футболки</a>
+      <a href="#lookbook"><span>04</span>Lookbook</a>
+      <a href="#story"><span>05</span>О бренде</a>
+    </nav>
+    <div class="mobile-menu__meta">
+      <span>Made in Russia</span>
+      <a href="mailto:hello@mahara.ru">hello@mahara.ru</a>
+    </div>
+  </aside>
+
+  <main>
+    <section class="hero" id="top" data-hero>
+      <div class="hero__ambient hero__ambient--one"></div>
+      <div class="hero__ambient hero__ambient--two"></div>
+      <div class="hero__architecture" aria-hidden="true">
+        <svg viewBox="0 0 720 900" preserveAspectRatio="xMidYMid meet">
+          <g fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M361 90v680M306 770h112M326 770V405h72v365M320 405l42-83 42 83M342 323V215h40v108M347 215l15-67 15 67M328 480h68M328 572h68M328 664h68"/>
+            <path d="M148 770V566h118v204M169 566l38-65 38 65M193 500V374h28v126M196 374l11-54 11 54M478 770V515h108v255M493 515l39-73 39 73M517 442V340h30v102M522 340l10-54 10 54"/>
+            <circle cx="362" cy="525" r="22"/><circle cx="207" cy="640" r="17"/><circle cx="532" cy="612" r="18"/>
+          </g>
+        </svg>
+      </div>
+
+      <div class="hero-photo hero-photo--left" data-parallax="-18">
+        <div class="hero-photo__frame"></div>
+        <img src="assets/images/hero-man.webp" alt="Мужчина в чёрном худи MAHARA" />
+      </div>
+      <div class="hero-photo hero-photo--right" data-parallax="18">
+        <div class="hero-photo__frame"></div>
+        <img src="assets/images/hero-woman.webp" alt="Девушка в чёрном худи MAHARA" />
+      </div>
+      <div class="hero-photo hero-photo--edge-left" data-parallax="-9" aria-hidden="true">
+        <img src="assets/images/hero-slate.webp" alt="" />
+      </div>
+      <div class="hero-photo hero-photo--edge-right" data-parallax="10" aria-hidden="true">
+        <img src="assets/images/hero-green-back.webp" alt="" />
+      </div>
+
+      <div class="hero__content container">
+        <p class="eyebrow hero-reveal">Уличная культура <span></span> Российский дух</p>
+        <h1 class="hero-title hero-reveal" aria-label="MAHARA">
+          <span class="hero-title__main">MAHARA</span>
+          <span class="hero-title__sub">MADE IN RUSSIA</span>
+        </h1>
+        <p class="hero__copy hero-reveal">Премиальная одежда с авторской вышивкой и арт‑принтами. Малые тиражи для тех, кто не хочет выглядеть как все.</p>
+        <div class="hero__actions hero-reveal">
+          <a class="button button--primary magnetic" href="#drop"><span>Смотреть дроп</span><i>↗</i></a>
+          <a class="button button--ghost magnetic" href="catalog.html"><span>Каталог</span><i>→</i></a>
+        </div>
+        <div class="hero__meta hero-reveal">
+          <div><strong>01</strong><span>Создано<br>в России</span></div>
+          <div><strong>02</strong><span>Лимитированные<br>дропы</span></div>
+          <div><strong>03</strong><span>Доставка<br>по миру</span></div>
+        </div>
+      </div>
+
+      <a class="hero-scroll" href="#categories" aria-label="Прокрутить ниже">
+        <span>Scroll</span><i></i>
+      </a>
+    </section>
+
+    <section class="marquee" aria-label="Преимущества бренда">
+      <div class="marquee__track">
+        <span>MADE IN RUSSIA</span><i>✦</i><span>SMALL DROPS</span><i>✦</i><span>PREMIUM COTTON</span><i>✦</i><span>EMBROIDERY</span><i>✦</i><span>MADE IN RUSSIA</span><i>✦</i><span>SMALL DROPS</span><i>✦</i><span>PREMIUM COTTON</span><i>✦</i><span>EMBROIDERY</span><i>✦</i>
+      </div>
+    </section>
+
+    <section class="categories section" id="categories">
+      <div class="container">
+        <div class="section-heading reveal">
+          <div>
+            <p class="eyebrow">Выбери свой силуэт</p>
+            <h2>Две линии.<br><em>Один характер.</em></h2>
+          </div>
+          <p>Вещи, которые работают и как самостоятельный образ, и как основа гардероба.</p>
+        </div>
+
+        <div class="category-grid">
+          <a class="category-card category-card--hoodie reveal" id="hoodies" href="catalog.html?category=hoodie">
+            <div class="category-card__media">
+              <img class="category-card__back" src="assets/images/green-hoodie-back.webp" alt="Зелёное худи MAHARA, вид сзади" />
+              <img class="category-card__front" src="assets/images/hero-man.webp" alt="Чёрное худи MAHARA" />
+            </div>
+            <div class="category-card__topline"><span>01</span><span>Embroidery collection</span></div>
+            <div class="category-card__body">
+              <h3>Худи</h3>
+              <p>Плотный хлопок, объёмная посадка и десятки деталей, которые хочется рассматривать.</p>
+              <span class="text-link">Смотреть все <i>→</i></span>
+            </div>
+          </a>
+
+          <a class="category-card category-card--tee reveal" id="tshirts" href="catalog.html?category=tee">
+            <div class="category-card__media">
+              <img class="category-card__back" src="assets/images/white-last-supper.webp" alt="Белая футболка MAHARA с арт-принтом" />
+              <img class="category-card__front" src="assets/images/slate-tee.webp" alt="Синяя футболка MAHARA с вышивкой" />
+            </div>
+            <div class="category-card__topline"><span>02</span><span>Art & embroidery</span></div>
+            <div class="category-card__body">
+              <h3>Футболки</h3>
+              <p>Свободный крой, плотная ткань и принты, которые превращают футболку в высказывание.</p>
+              <span class="text-link">Смотреть все <i>→</i></span>
+            </div>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <section class="drop section" id="drop">
+      <div class="container">
+        <div class="section-heading section-heading--row reveal">
+          <div>
+            <p class="eyebrow">New drop / 01</p>
+            <h2>Главные вещи<br><em>этого сезона.</em></h2>
+          </div>
+          <a class="button button--ghost" href="catalog.html"><span>Весь каталог</span><i>→</i></a>
+        </div>
+
+        <div class="product-track" data-product-grid="featured" aria-label="Новый дроп"></div>
+      </div>
+    </section>
+
+    <section class="campaign section" aria-label="Кампания MAHARA">
+      <div class="campaign__media reveal">
+        <img src="assets/images/green-tee-seated.webp" alt="Модель в зелёной футболке MAHARA" />
+        <div class="campaign__shade"></div>
+      </div>
+      <div class="campaign__content container">
+        <p class="eyebrow reveal">Campaign 001</p>
+        <h2 class="reveal">Не просто одежда.<br><em>Часть разговора.</em></h2>
+        <p class="reveal">Коллекция соединяет архитектуру, культурные символы и современный уличный силуэт. В каждой вещи — детали, которые считываются постепенно.</p>
+        <a class="button button--light magnetic reveal" href="#lookbook"><span>Открыть lookbook</span><i>↘</i></a>
+      </div>
+      <div class="campaign__caption"><span>MAHARA</span><span>Rostov / Moscow / World</span></div>
+    </section>
+
+    <section class="lookbook section" id="lookbook">
+      <div class="container">
+        <div class="section-heading section-heading--row reveal">
+          <div>
+            <p class="eyebrow">Lookbook</p>
+            <h2>Люди.<br><em>Не манекены.</em></h2>
+          </div>
+          <p>Реальные образы, разные характеры и один визуальный код.</p>
+        </div>
+      </div>
+
+      <div class="lookbook-slider" data-drag-scroll>
+        <figure class="lookbook-card lookbook-card--wide reveal"><img src="assets/images/hero-woman.webp" alt="Девушка в чёрном худи MAHARA" /><figcaption><span>01</span>Black hoodie</figcaption></figure>
+        <figure class="lookbook-card reveal"><img src="assets/images/green-tee.webp" alt="Мужчина в зелёной футболке MAHARA" /><figcaption><span>02</span>Last Supper / Green</figcaption></figure>
+        <figure class="lookbook-card lookbook-card--tall reveal"><img src="assets/images/burgundy-tee-angle.webp" alt="Мужчина в бордовой футболке MAHARA" /><figcaption><span>03</span>Last Supper / Burgundy</figcaption></figure>
+        <figure class="lookbook-card reveal"><img src="assets/images/green-hoodie.webp" alt="Мужчина в зелёном худи MAHARA" /><figcaption><span>04</span>Green hoodie</figcaption></figure>
+        <figure class="lookbook-card lookbook-card--wide reveal"><img src="assets/images/white-last-supper.webp" alt="Мужчина в белой футболке MAHARA" /><figcaption><span>05</span>Last Supper / White</figcaption></figure>
+        <figure class="lookbook-card reveal"><img src="assets/images/slate-tee-back.webp" alt="Футболка MAHARA, вид сзади" /><figcaption><span>06</span>Slate / Back</figcaption></figure>
+      </div>
+    </section>
+
+    <section class="story section" id="story">
+      <div class="container story__grid">
+        <div class="story__visual reveal">
+          <div class="story__picture story__picture--main"><img src="assets/images/black-last-supper.webp" alt="Чёрная футболка MAHARA с арт-принтом" /></div>
+          <div class="story__picture story__picture--float"><img src="assets/images/green-tee-close.webp" alt="Зелёная футболка MAHARA с арт-принтом" /></div>
+          <span class="story__stamp">MADE<br>IN<br>RUSSIA</span>
+        </div>
+        <div class="story__copy reveal">
+          <p class="eyebrow">О бренде</p>
+          <h2>Локальный бренд<br><em>без провинциальности.</em></h2>
+          <p class="story__lead">MAHARA создаёт одежду в России и говорит с миром на современном визуальном языке.</p>
+          <p>Мы не пытаемся выпускать всё для всех. Вместо этого делаем небольшие коллекции, следим за посадкой, тканью и тем, как каждая деталь проживёт вместе с владельцем.</p>
+          <div class="story__facts">
+            <div><strong>100%</strong><span>разработка<br>в России</span></div>
+            <div><strong>Small</strong><span>лимитированные<br>тиражи</span></div>
+            <div><strong>24/7</strong><span>стиль вне<br>сезонов</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="newsletter section">
+      <div class="newsletter__glow"></div>
+      <div class="container newsletter__inner reveal">
+        <p class="eyebrow">Первым увидеть новый дроп</p>
+        <h2>Никакого спама.<br><em>Только вещи по делу.</em></h2>
+        <form class="newsletter-form" data-newsletter-form>
+          <label class="sr-only" for="email">Электронная почта</label>
+          <input id="email" name="email" type="email" placeholder="Ваш e-mail" required />
+          <button type="submit"><span>Подписаться</span><i>→</i></button>
+        </form>
+        <p class="newsletter__note">Нажимая «Подписаться», вы соглашаетесь с политикой обработки данных.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container site-footer__top">
+      <a class="footer-brand" href="#top">MAHARA <small>MADE IN RUSSIA</small></a>
+      <div class="footer-links">
+        <div><span>Shop</span><a href="catalog.html">Каталог</a><a href="catalog.html?category=hoodie">Худи</a><a href="catalog.html?category=tee">Футболки</a></div>
+        <div><span>Info</span><a href="#story">О бренде</a><a href="#">Доставка и оплата</a><a href="#">Обмен и возврат</a></div>
+        <div><span>Social</span><a href="#">Telegram</a><a href="#">VK</a><a href="#">Instagram*</a></div>
+      </div>
+    </div>
+    <div class="container site-footer__bottom"><span>© 2026 MAHARA</span><span>Сделано в России</span><span>*Прототип сайта</span></div>
+  </footer>
+
+  <div class="search-panel" data-search-panel aria-hidden="true">
+    <button class="search-panel__close" type="button" data-search-close aria-label="Закрыть поиск">×</button>
+    <form class="search-panel__form" action="catalog.html">
+      <label for="site-search">Что вы ищете?</label>
+      <div><input id="site-search" name="q" type="search" placeholder="Например, зелёное худи" autocomplete="off" /><button type="submit">Найти →</button></div>
+    </form>
+  </div>
+
+  <div class="drawer-overlay" data-drawer-overlay></div>
+  <aside class="cart-drawer" data-cart-drawer aria-hidden="true">
+    <div class="cart-drawer__header"><div><span>Корзина</span><small data-cart-caption>0 товаров</small></div><button type="button" class="cart-close" aria-label="Закрыть корзину">×</button></div>
+    <div class="cart-items" data-cart-items></div>
+    <div class="cart-empty" data-cart-empty><span>Корзина пока пуста</span><p>Добавьте вещь из нового дропа.</p><a href="catalog.html">Открыть каталог →</a></div>
+    <div class="cart-drawer__footer" data-cart-footer>
+      <div><span>Итого</span><strong data-cart-total>0 ₽</strong></div>
+      <button type="button">Перейти к оформлению <i>→</i></button>
+      <small>Доставка рассчитывается при оформлении.</small>
+    </div>
+  </aside>
+
+  <div class="quick-view" data-quick-view aria-hidden="true">
+    <button class="quick-view__close" type="button" aria-label="Закрыть">×</button>
+    <div class="quick-view__media"><img src="" alt="" data-quick-image /></div>
+    <div class="quick-view__content">
+      <p class="eyebrow" data-quick-label>New drop</p>
+      <h2 data-quick-title></h2>
+      <p class="quick-view__description" data-quick-description></p>
+      <strong class="quick-view__price" data-quick-price></strong>
+      <div class="quick-view__sizes"><span>Размер</span><div data-quick-sizes></div></div>
+      <button class="button button--primary quick-add" type="button"><span>Добавить в корзину</span><i>→</i></button>
+    </div>
+  </div>
+
+  <div class="toast" data-toast role="status" aria-live="polite"></div>
+  <script src="script.js"></script>
+</body>
+</html>
