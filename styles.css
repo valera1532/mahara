@@ -1367,14 +1367,16 @@ body.is-loaded .hero-reveal:nth-child(5) { transition-delay: .42s; }
   scroll-snap-type: x mandatory;
   scroll-padding-inline: var(--lookbook-gutter);
   scrollbar-width: none;
+  outline: none;
   cursor: grab;
   user-select: none;
   touch-action: pan-x pan-y;
 }
 
 .lookbook-slider::-webkit-scrollbar { display: none; }
-.lookbook-slider:focus-visible { outline: 2px solid var(--red); outline-offset: -2px; }
-.lookbook-slider.is-dragging { cursor: grabbing; scroll-snap-type: none; scroll-behavior: auto; }
+.lookbook-slider.is-dragging { cursor: grabbing; }
+.lookbook-slider.is-dragging,
+.lookbook-slider.is-settling { scroll-snap-type: none; scroll-behavior: auto; }
 
 .lookbook-card {
   position: relative;
@@ -1382,7 +1384,7 @@ body.is-loaded .hero-reveal:nth-child(5) { transition-delay: .42s; }
   height: 570px;
   overflow: hidden;
   scroll-snap-align: start;
-  scroll-snap-stop: always;
+  scroll-snap-stop: normal;
   border-radius: var(--radius-sm);
   background: #151517;
 }
@@ -1435,6 +1437,9 @@ body.is-loaded .hero-reveal:nth-child(5) { transition-delay: .42s; }
 }
 
 .lookbook-pagination button[aria-current="true"]::before { width: 24px; background: var(--red); }
+.lookbook-slider:focus-visible + .lookbook-controls .lookbook-pagination button[aria-current="true"]::before {
+  box-shadow: 0 0 0 3px rgba(241,38,56,.2);
+}
 .lookbook-arrow:focus-visible,
 .lookbook-pagination button:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
 
@@ -1448,10 +1453,14 @@ body.is-loaded .hero-reveal:nth-child(5) { transition-delay: .42s; }
   pointer-events: none;
 }
 
-.lookbook-card:hover img {
-  transform: scale(1.04);
-  filter: saturate(.98) contrast(1.04) brightness(.94);
+@media (hover: hover) and (pointer: fine) {
+  .lookbook-card:hover img {
+    transform: scale(1.04);
+    filter: saturate(.98) contrast(1.04) brightness(.94);
+  }
 }
+
+.lookbook-slider.is-dragging .lookbook-card img { transition: none; transform: none; }
 
 .lookbook-card::after {
   content: "";

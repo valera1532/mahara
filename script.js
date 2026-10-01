@@ -503,6 +503,10 @@
     let maxScroll = 0;
     let requestedIndex = null;
     let mouseDrag = null;
+    let nativeTouch = false;
+    let settling = false;
+    let settleFrame = 0;
+    let dragFrame = 0;
     let scrollFrame = 0;
     let resizeFrame = 0;
     let scrollTimer;
@@ -521,18 +525,74 @@
       });
     };
 
+    const cancelSettle = () => {
+      cancelAnimationFrame(settleFrame);
+      settleFrame = 0;
+      settling = false;
+      requestedIndex = null;
+      clearTimeout(scrollTimer);
+    };
+
     const goTo = index => {
+      cancelSettle();
       requestedIndex = Math.max(0, Math.min(index, stops.length - 1));
-      slider.scrollTo({ left: stops[requestedIndex], behavior: reducedMotion.matches ? 'auto' : 'smooth' });
-      syncControls();
+      const start = slider.scrollLeft;
+      const target = stops[requestedIndex];
+      slider.classList.add('is-settling');
+
+      const complete = () => {
+        slider.scrollLeft = target;
+        settleFrame = 0;
+        settling = false;
+        requestedIndex = null;
+        slider.classList.remove('is-settling');
+        syncControls();
+      };
+      if (reducedMotion.matches || Math.abs(target - start) <= .5) {
+        complete();
+        return;
+      }
+
+      settling = true;
+      let startedAt;
+      const step = timestamp => {
+        startedAt ??= timestamp;
+        const progress = Math.min(1, (timestamp - startedAt) / 480);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        slider.scrollLeft = start + (target - start) * eased;
+        if (progress < 1) settleFrame = requestAnimationFrame(step);
+        else complete();
+      };
+      settleFrame = requestAnimationFrame(step);
     };
 
     const finishScroll = () => {
-      requestedIndex = null;
-      syncControls();
+      if (settling || mouseDrag || nativeTouch) return;
+      if (slider.classList.contains('is-settling')) goTo(nearestIndex());
+      else syncControls();
+    };
+
+    const scheduleFinish = () => {
+      clearTimeout(scrollTimer);
+      scrollTimer = setTimeout(finishScroll, 160);
+    };
+
+    const flushDrag = () => {
+      cancelAnimationFrame(dragFrame);
+      dragFrame = 0;
+      if (mouseDrag?.moved) slider.scrollLeft = mouseDrag.pendingScroll;
     };
 
     const measure = () => {
+      cancelSettle();
+      slider.classList.add('is-settling');
+      if (mouseDrag) {
+        flushDrag();
+        const pointerId = mouseDrag.pointerId;
+        mouseDrag = null;
+        slider.classList.remove('is-dragging');
+        if (slider.hasPointerCapture(pointerId)) slider.releasePointerCapture(pointerId);
+      }
       const gutter = parseFloat(getComputedStyle(slider).paddingLeft) || 0;
       const origin = slider.getBoundingClientRect().left + slider.clientLeft;
       maxScroll = Math.max(0, slider.scrollWidth - slider.clientWidth);
@@ -545,7 +605,6 @@
       if (maxScroll - measured[measured.length - 1] > 1) measured.push(maxScroll);
       else measured[measured.length - 1] = maxScroll;
       stops = measured;
-      requestedIndex = null;
 
       if (pagination.children.length !== stops.length) {
         const focusedIndex = Array.from(pagination.children).indexOf(document.activeElement);
@@ -561,11 +620,12 @@
         if (focusedIndex >= 0) pagination.children[Math.min(focusedIndex, stops.length - 1)].focus({ preventScroll: true });
       }
 
-      slider.scrollTo({ left: stops[nearestIndex()], behavior: 'auto' });
+      if (!nativeTouch) goTo(nearestIndex());
       syncControls();
     };
 
     const scheduleMeasure = () => {
+      cancelSettle();
       cancelAnimationFrame(resizeFrame);
       resizeFrame = requestAnimationFrame(measure);
     };
@@ -588,18 +648,31 @@
         scrollFrame = 0;
         syncControls();
       });
-      clearTimeout(scrollTimer);
-      scrollTimer = setTimeout(finishScroll, 160);
+      scheduleFinish();
     }, { passive: true });
     slider.addEventListener('scrollend', finishScroll);
-    slider.addEventListener('wheel', () => { requestedIndex = null; }, { passive: true });
+    slider.addEventListener('wheel', () => {
+      cancelSettle();
+      scheduleFinish();
+    }, { passive: true });
+
+    slider.addEventListener('touchstart', () => {
+      nativeTouch = true;
+      cancelSettle();
+    }, { passive: true });
+    const finishTouch = event => {
+      nativeTouch = event.touches.length > 0;
+      if (!nativeTouch) scheduleFinish();
+    };
+    slider.addEventListener('touchend', finishTouch, { passive: true });
+    slider.addEventListener('touchcancel', finishTouch, { passive: true });
 
     slider.addEventListener('pointerdown', event => {
-      requestedIndex = null;
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
+      cancelSettle();
       if (event.pointerType !== 'mouse' || event.button !== 0) return;
-      mouseDrag = { pointerId: event.pointerId, startX: event.clientX, startScroll: slider.scrollLeft, moved: false };
+      mouseDrag = { pointerId: event.pointerId, startX: event.clientX, startScroll: slider.scrollLeft, pendingScroll: slider.scrollLeft, moved: false };
       slider.setPointerCapture(event.pointerId);
-      slider.focus({ preventScroll: true });
     });
 
     slider.addEventListener('pointermove', event => {
@@ -609,17 +682,24 @@
       mouseDrag.moved = true;
       slider.classList.add('is-dragging');
       event.preventDefault();
-      slider.scrollLeft = Math.max(0, Math.min(mouseDrag.startScroll - distance, maxScroll));
+      mouseDrag.pendingScroll = Math.max(0, Math.min(mouseDrag.startScroll - distance, maxScroll));
+      if (!dragFrame) dragFrame = requestAnimationFrame(() => {
+        dragFrame = 0;
+        if (mouseDrag) slider.scrollLeft = mouseDrag.pendingScroll;
+      });
     });
 
     const finishDrag = event => {
       if (!mouseDrag || event.pointerId !== mouseDrag.pointerId) return;
+      flushDrag();
       const moved = mouseDrag.moved;
       mouseDrag = null;
       const target = nearestIndex();
+      const needsSettle = moved || slider.classList.contains('is-settling');
+      if (needsSettle) slider.classList.add('is-settling');
       slider.classList.remove('is-dragging');
       if (slider.hasPointerCapture(event.pointerId)) slider.releasePointerCapture(event.pointerId);
-      if (moved) goTo(target);
+      if (needsSettle) goTo(target);
     };
     slider.addEventListener('pointerup', finishDrag);
     slider.addEventListener('pointercancel', finishDrag);
@@ -628,6 +708,9 @@
 
     window.addEventListener('resize', scheduleMeasure, { passive: true });
     if (typeof ResizeObserver !== 'undefined') new ResizeObserver(scheduleMeasure).observe(slider);
+    reducedMotion.addEventListener('change', () => {
+      if (reducedMotion.matches && requestedIndex !== null) goTo(requestedIndex);
+    });
     measure();
   }
 
