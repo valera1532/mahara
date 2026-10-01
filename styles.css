@@ -2147,10 +2147,7 @@ body.is-loaded .hero-reveal:nth-child(5) { transition-delay: .42s; }
 }
 
 .catalog-hero__visual--emblem {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
-  place-items: center;
+  --emblem-inset: clamp(16px, 1.5vw, 24px);
   isolation: isolate;
   border: 0;
   border-radius: 0;
@@ -2182,10 +2179,11 @@ body.is-loaded .hero-reveal:nth-child(5) { transition-delay: .42s; }
 }
 
 .catalog-hero__emblem {
-  position: relative;
+  position: absolute;
+  inset: var(--emblem-inset);
   z-index: 1;
-  width: 94%;
-  height: 94%;
+  width: calc(100% - var(--emblem-inset) - var(--emblem-inset));
+  height: calc(100% - var(--emblem-inset) - var(--emblem-inset));
   min-width: 0;
   min-height: 0;
   object-fit: contain;
