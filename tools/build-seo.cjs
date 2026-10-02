@@ -45,10 +45,11 @@ function head({ file, title, description, image = 'assets/images/social-cover.jp
   <meta name="twitter:image" content="${url(image)}" />
   <meta name="twitter:image:alt" content="${escape(title)}" />
   <link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=20261002-1" />
+  <link rel="stylesheet" href="styles.css?v=20261002-2" />
   <script type="application/ld+json">${JSON.stringify({ '@context': 'https://schema.org', '@graph': graph }).replace(/</g, '\\u003c')}</script>
-  <script defer src="catalog-data.js?v=20261002-1"></script>
-  <script defer src="script.js?v=20261002-1"></script>
+  <script defer src="catalog-data.js?v=20261002-2"></script>
+  <script defer src="cms-data.js?v=20261002-2"></script>
+  <script defer src="script.js?v=20261002-2"></script>
 </head>`;
 }
 

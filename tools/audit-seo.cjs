@@ -180,38 +180,43 @@ async function run() {
         const response = await page.goto(pageURL, { waitUntil: 'load' });
         check(response?.status() === 200, `${label}: HTTP status is not 200`);
         const data = await snapshot(page);
+        const isAdmin = label === 'admin.html';
         check(data.lang === 'ru', `${label}: document language must be ru`);
         check(data.title.length === 1 && data.title[0], `${label}: exactly one nonempty title required`);
         check(!titles.has(data.title[0]), `${label}: duplicate title`);
         titles.add(data.title[0]);
-        check(data.description.length === 1 && data.description[0]?.trim(), `${label}: exactly one nonempty description required`);
-        check(!descriptions.has(data.description[0]), `${label}: duplicate description`);
-        descriptions.add(data.description[0]);
-        check(data.canonical.length === 1 && data.canonical[0] === canonicalFor(file), `${label}: canonical must be ${canonicalFor(file)}`);
-        if (data.canonical[0]) canonicals.add(data.canonical[0]);
-        check(!data.robots.some(value => /\b(?:noindex|none)\b/i.test(value)), `${label}: indexable page has noindex`);
-        for (const property of ['og:title', 'og:description', 'og:type', 'og:url', 'og:image']) {
-          check(Boolean(data.og[property]?.trim()), `${label}: missing ${property}`);
-        }
-        check(data.og['og:url'] === data.canonical[0], `${label}: og:url differs from canonical`);
-        check(data.twitterCard.length === 1 && ['summary', 'summary_large_image'].includes(data.twitterCard[0]), `${label}: missing supported twitter:card`);
-        if (data.og['og:image']) {
-          check(data.og['og:image'].startsWith(publicBase.href), `${label}: og:image must use the production base URL`);
-          checkReference(data.og['og:image'], pageURL, origin, label, 'OG image');
-        }
-        check(data.jsonLD.length > 0, `${label}: no static JSON-LD`);
-        let pageHasProduct = false;
-        for (const source of data.jsonLD) {
-          try {
-            const nodes = schemaNodes(JSON.parse(source));
-            pageHasProduct ||= nodes.some(node => [node['@type']].flat().includes('Product'));
-            check(!nodes.some(node => [node['@type']].flat().some(type => ['Offer', 'AggregateOffer', 'Review', 'AggregateRating'].includes(type))), `${label}: unconfirmed commerce/review schema`);
-            check(!nodes.some(node => ['offers', 'review', 'aggregateRating'].some(key => Object.hasOwn(node, key))), `${label}: unconfirmed offers/reviews in structured data`);
-          } catch (error) { check(false, `${label}: JSON-LD parse error: ${error.message}`); }
-        }
-        if (pageHasProduct) {
-          productPages += 1;
-          productCanonicals.add(data.canonical[0]);
+        if (isAdmin) {
+          check(data.robots.some(value => /\b(?:noindex|none)\b/i.test(value)), `${label}: demo administration must have noindex`);
+        } else {
+          check(data.description.length === 1 && data.description[0]?.trim(), `${label}: exactly one nonempty description required`);
+          check(!descriptions.has(data.description[0]), `${label}: duplicate description`);
+          descriptions.add(data.description[0]);
+          check(data.canonical.length === 1 && data.canonical[0] === canonicalFor(file), `${label}: canonical must be ${canonicalFor(file)}`);
+          if (data.canonical[0]) canonicals.add(data.canonical[0]);
+          check(!data.robots.some(value => /\b(?:noindex|none)\b/i.test(value)), `${label}: indexable page has noindex`);
+          for (const property of ['og:title', 'og:description', 'og:type', 'og:url', 'og:image']) {
+            check(Boolean(data.og[property]?.trim()), `${label}: missing ${property}`);
+          }
+          check(data.og['og:url'] === data.canonical[0], `${label}: og:url differs from canonical`);
+          check(data.twitterCard.length === 1 && ['summary', 'summary_large_image'].includes(data.twitterCard[0]), `${label}: missing supported twitter:card`);
+          if (data.og['og:image']) {
+            check(data.og['og:image'].startsWith(publicBase.href), `${label}: og:image must use the production base URL`);
+            checkReference(data.og['og:image'], pageURL, origin, label, 'OG image');
+          }
+          check(data.jsonLD.length > 0, `${label}: no static JSON-LD`);
+          let pageHasProduct = false;
+          for (const source of data.jsonLD) {
+            try {
+              const nodes = schemaNodes(JSON.parse(source));
+              pageHasProduct ||= nodes.some(node => [node['@type']].flat().includes('Product'));
+              check(!nodes.some(node => [node['@type']].flat().some(type => ['Offer', 'AggregateOffer', 'Review', 'AggregateRating'].includes(type))), `${label}: unconfirmed commerce/review schema`);
+              check(!nodes.some(node => ['offers', 'review', 'aggregateRating'].some(key => Object.hasOwn(node, key))), `${label}: unconfirmed offers/reviews in structured data`);
+            } catch (error) { check(false, `${label}: JSON-LD parse error: ${error.message}`); }
+          }
+          if (pageHasProduct) {
+            productPages += 1;
+            productCanonicals.add(data.canonical[0]);
+          }
         }
         check(data.mainCount === 1 && data.mainVisible, `${label}: one visible main required without JavaScript`);
         check(data.h1.length === 1 && data.h1[0].text && data.h1[0].visible, `${label}: one visible, nonempty H1 required without JavaScript`);

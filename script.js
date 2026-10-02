@@ -1,8 +1,13 @@
-(() => {
+(async () => {
   'use strict';
 
-  const { products: PRODUCTS, card: productCard } = window.MaharaCatalog;
   document.documentElement.classList.add('js');
+  if (window.MaharaCMS) {
+    try { window.MaharaCMS.apply(await window.MaharaCMS.load()); }
+    catch { /* Keep the static storefront usable when browser storage is unavailable. */ }
+  }
+  const { products: PRODUCTS, card: productCard } = window.MaharaCatalog;
+  const escapeHTML = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
@@ -41,7 +46,7 @@
     try { localStorage.setItem('maharaCart', JSON.stringify(state.cart)); } catch { /* preview/file mode */ }
   }
 
-  const initialProductGrids = new WeakMap();
+  let initialProductGrids = new WeakMap();
 
   function renderProducts() {
     $$('[data-product-grid]').forEach(grid => {
@@ -175,13 +180,13 @@
       if (!product) return '';
       return `
         <div class="cart-item">
-          <img src="${product.image}" alt="${product.title}" width="${product.width}" height="${product.height}" decoding="async" loading="lazy" />
+          <img src="${product.image}" alt="${escapeHTML(product.title)}" width="${product.width}" height="${product.height}" decoding="async" loading="lazy" />
           <div class="cart-item__copy">
-            <strong>${product.title}</strong>
-            <span>Размер ${item.size} · ${item.qty} шт</span>
+            <strong>${escapeHTML(product.title)}</strong>
+            <span>Размер ${escapeHTML(item.size)} · ${item.qty} шт</span>
             <b>${formatPrice(product.price * item.qty)}</b>
           </div>
-          <button class="cart-item__remove" type="button" data-cart-remove="${index}" aria-label="Удалить из корзины: ${product.title}, размер ${item.size}">×</button>
+          <button class="cart-item__remove" type="button" data-cart-remove="${index}" aria-label="Удалить из корзины: ${escapeHTML(product.title)}, размер ${escapeHTML(item.size)}">×</button>
         </div>`;
     }).join('');
 
@@ -199,7 +204,7 @@
   }
 
   const filterViewport = matchMedia('(max-width: 700px)');
-  const menuViewport = matchMedia('(max-width: 920px)');
+  const menuViewport = matchMedia('(max-width: 1080px)');
   const overlayPanels = [
     { element: $('[data-mobile-menu]'), bodyClass: 'menu-open', triggers: '[data-menu-toggle]' },
     { element: $('[data-search-panel]'), bodyClass: 'search-open', triggers: '.search-trigger' },
@@ -343,9 +348,9 @@
     closeOverlay($('[data-cart-drawer]'));
   }
 
-  function openQuickView(product) {
+  function openQuickView(product, selectedSize = product.sizes[0], refresh = false) {
     state.quickProduct = product;
-    state.quickSize = product.sizes[0];
+    state.quickSize = product.sizes.includes(selectedSize) ? selectedSize : product.sizes[0];
     const modal = $('[data-quick-view]');
     if (!modal) return;
 
@@ -361,8 +366,9 @@
     $('[data-quick-label]', modal).textContent = product.label;
 
     const sizesNode = $('[data-quick-sizes]', modal);
-    sizesNode.innerHTML = product.sizes.map((size, index) =>
-      `<button type="button" class="${index === 0 ? 'is-active' : ''}" data-quick-size="${size}" aria-pressed="${index === 0}" aria-label="Размер ${size}">${size}</button>`
+    const restoreSizeFocus = sizesNode.contains(document.activeElement);
+    sizesNode.innerHTML = product.sizes.map(size =>
+      `<button type="button" class="${size === state.quickSize ? 'is-active' : ''}" data-quick-size="${size}" aria-pressed="${size === state.quickSize}" aria-label="Размер ${size}">${size}</button>`
     ).join('');
     $$('[data-quick-size]', sizesNode).forEach(button => {
       button.addEventListener('click', () => {
@@ -376,7 +382,8 @@
       });
     });
 
-    openOverlay(modal);
+    if (refresh && restoreSizeFocus) $('[data-quick-size].is-active', sizesNode)?.focus();
+    if (!refresh) openOverlay(modal);
   }
 
   function closeQuickView() {
@@ -937,4 +944,24 @@
   setupNewsletter();
   setupCustomCursor();
   setupImageHoverSwap();
+
+  function refreshContent(content) {
+    const quickWasOpen = activeOverlay === $('[data-quick-view]');
+    const quickId = state.quickProduct?.id;
+    const selectedSize = state.quickSize;
+    window.MaharaCMS.apply(content);
+    initialProductGrids = new WeakMap();
+    renderProducts();
+    bindProductCards(document);
+    updateCartUI();
+    if (quickWasOpen) {
+      const product = PRODUCTS.find(item => item.id === quickId);
+      if (product) openQuickView(product, selectedSize, true);
+    }
+  }
+  window.addEventListener('mahara:content-saved', event => refreshContent(event.detail));
+  window.addEventListener('mahara:content-updated', async () => {
+    try { refreshContent(await window.MaharaCMS.load()); }
+    catch { /* A failed refresh keeps the current content visible. */ }
+  });
 })();

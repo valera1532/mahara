@@ -341,7 +341,15 @@ body.is-loaded .preloader,
 .desktop-nav {
   display: flex;
   align-items: center;
-  gap: clamp(22px, 3.2vw, 54px);
+  gap: clamp(18px, 2.2vw, 36px);
+}
+
+.desktop-nav .nav-cms { color: var(--red-bright); }
+
+@media (min-width: 921px) and (max-width: 1080px) {
+  .desktop-nav, .desktop-only { display: none; }
+  .site-header { grid-template-columns: 1fr auto; padding-inline: 18px; }
+  .site-header .menu-toggle { display: grid; }
 }
 
 .desktop-nav a {
@@ -451,6 +459,7 @@ body.is-loaded .preloader,
   inset: 0;
   z-index: 900;
   display: grid;
+  overflow-y: auto;
   align-content: center;
   padding: calc(var(--header-h) + 38px) 24px 40px;
   background: #070708;
@@ -510,6 +519,12 @@ body.is-loaded .preloader,
   font-size: .72rem;
   letter-spacing: .06em;
   text-transform: uppercase;
+}
+
+@media (max-height: 640px) {
+  .mobile-menu { align-content: start; padding-bottom: 24px; }
+  .mobile-menu nav a { padding-block: 11px; font-size: clamp(1.8rem, 6.5vw, 2.5rem); }
+  .mobile-menu__meta { position: relative; inset: auto; margin-top: 24px; flex-wrap: wrap; gap: 10px; }
 }
 
 /* General typography and controls */
@@ -872,6 +887,8 @@ body.is-loaded .preloader,
 
 .hero-title__main {
   position: relative;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   font-family: var(--display);
   font-size: clamp(7rem, 10.6vw, 11.2rem);
   font-weight: 400;
@@ -889,7 +906,7 @@ body.is-loaded .preloader,
 }
 
 .hero-title__main::after {
-  content: "MAHARA";
+  content: attr(data-title);
   position: absolute;
   inset: 0;
   z-index: -1;
@@ -899,6 +916,8 @@ body.is-loaded .preloader,
 }
 
 .hero-title__sub {
+  max-width: 100%;
+  overflow-wrap: anywhere;
   margin-top: 24px;
   color: #ff5162;
   font-family: var(--display);

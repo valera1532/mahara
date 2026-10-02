@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#050505" />
+  <title>Управление сайтом — MAHARA</title>
+  <meta name="description" content="Демонстрационная панель управления сайтом MAHARA: тексты, фотографии и товары." />
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="styles.css?v=20261002-2" />
+  <link rel="stylesheet" href="admin.css?v=20261002-2" />
+  <script defer src="catalog-data.js?v=20261002-2"></script>
+  <script defer src="cms-data.js?v=20261002-2"></script>
+  <script defer src="script.js?v=20261002-2"></script>
+  <script defer src="admin.js?v=20261002-2"></script>
+</head>
+<body class="page-admin">
+  <a class="skip-link" href="#main-content">Перейти к содержимому</a>
+  <div class="site-noise" aria-hidden="true"></div>
+  <div class="cursor-dot" aria-hidden="true"></div>
+  <div class="cursor-ring" aria-hidden="true"></div>
+  <header class="site-header site-header--solid" data-header>
+    <a class="brand" href="index.html" aria-label="MAHARA — на главную">
+      <svg class="brand__icon" viewBox="0 0 64 64" aria-hidden="true"><path d="M14 50V32l8-8 5 5V17l5-7 5 7v12l5-5 8 8v18M8 50h48M22 50V35M32 50V21M42 50V35" /></svg>
+      <span>MAHARA</span>
+    </a>
+    <nav class="desktop-nav" aria-label="Основная навигация">
+      <a href="catalog.html">Каталог</a>
+      <a href="catalog.html?category=hoodie">Худи</a>
+      <a href="catalog.html?category=tee">Футболки</a>
+      <a href="index.html#lookbook">Lookbook</a>
+      <a href="index.html#story">О бренде</a>
+      <a class="nav-cms is-active" href="admin.html" aria-current="page">Управление</a>
+    </nav>
+    <div class="header-actions js-only">
+      <button class="icon-button search-trigger" type="button" aria-label="Поиск" aria-haspopup="dialog" aria-controls="search-dialog" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg></button>
+      <button class="icon-button desktop-only" type="button" aria-label="Личный кабинет" disabled title="Скоро появится"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 21c.6-4.2 3.1-6.4 7-6.4s6.4 2.2 7 6.4"/></svg></button>
+      <button class="icon-button cart-trigger" type="button" aria-label="Корзина" aria-haspopup="dialog" aria-controls="cart-dialog" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1 13H6L5 8Z"/><path d="M9 9V6a3 3 0 0 1 6 0v3"/></svg><span class="cart-count" data-cart-count>0</span></button>
+      <button class="menu-toggle" type="button" data-menu-toggle aria-label="Открыть меню" aria-expanded="false" aria-controls="mobile-menu" aria-haspopup="dialog"><span></span><span></span></button>
+    </div>
+  </header>
+
+  <aside class="mobile-menu" id="mobile-menu" data-mobile-menu role="dialog" aria-modal="true" aria-label="Меню" aria-hidden="true" inert tabindex="-1">
+    <button class="mobile-menu__close" type="button" data-menu-close aria-label="Закрыть меню">×</button>
+    <div class="mobile-menu__glow"></div>
+    <nav aria-label="Мобильная навигация">
+      <a href="catalog.html"><span>01</span>Каталог</a>
+      <a href="catalog.html?category=hoodie"><span>02</span>Худи</a>
+      <a href="catalog.html?category=tee"><span>03</span>Футболки</a>
+      <a href="index.html#lookbook"><span>04</span>Lookbook</a>
+      <a href="index.html#story"><span>05</span>О бренде</a>
+      <a class="is-active" href="admin.html" aria-current="page"><span>06</span>Управление</a>
+    </nav>
+    <div class="mobile-menu__meta"><span>Made in Russia</span><a href="mailto:hello@mahara.ru">hello@mahara.ru</a></div>
+  </aside>
+  <main class="cms-main" id="main-content" tabindex="-1">
+    <div class="cms-container">
+      <nav class="breadcrumbs" aria-label="Хлебные крошки"><a href="index.html">Главная</a><span aria-hidden="true">/</span><span aria-current="page">Управление</span></nav>
+      <section class="cms-intro" aria-labelledby="cms-title">
+        <div>
+          <p class="eyebrow">MAHARA / Demo CMS</p>
+          <h1 id="cms-title">Управление<br><em>сайтом</em></h1>
+        </div>
+        <div class="cms-intro__copy">
+          <p>Ваши тексты, ваши фотографии, ваш характер.<br>Выберите раздел или товар и попробуйте изменить сайт.</p>
+          <div class="cms-demo-note">Демо: изменения сохраняются только в этом браузере.</div>
+        </div>
+      </section>
+      <noscript><p class="cms-no-js">Для управления сайтом включите JavaScript в настройках браузера. <a href="index.html">Открыть сайт →</a></p></noscript>
+      <div class="cms-workspace js-only" data-cms-workspace aria-busy="true">
+        <aside class="cms-panel cms-sidebar" aria-label="Выбрать содержимое сайта">
+          <h2 class="cms-sidebar__title">Содержимое сайта</h2>
+          <div class="cms-sidebar__group">
+            <h3 class="cms-sidebar__heading">Главная страница <span data-cms-section-count>4</span></h3>
+            <div class="cms-list" data-cms-sections role="group" aria-label="Разделы главной страницы"></div>
+          </div>
+          <div class="cms-sidebar__group">
+            <h3 class="cms-sidebar__heading">Товары <span data-cms-product-count>8</span></h3>
+            <div class="cms-list" data-cms-products role="group" aria-label="Товары каталога"></div>
+          </div>
+          <p class="cms-sidebar__footer">Все изменения можно сбросить</p>
+        </aside>
+        <section class="cms-panel cms-editor" aria-labelledby="cms-editor-title">
+          <div class="cms-editor__header">
+            <span class="cms-kicker" data-cms-editor-kicker>Главная страница / 01</span>
+            <h2 id="cms-editor-title">Первый экран</h2>
+            <p data-cms-editor-description>Редактируйте поля — результат сразу появится справа.</p>
+          </div>
+          <form id="cms-form" novalidate>
+            <div class="cms-fields" data-cms-fields><p class="cms-loading">Загружаем содержимое сайта…</p></div>
+            <div class="cms-editor__footer">
+              <p class="cms-status" data-cms-status data-state="busy" role="status" aria-live="polite" aria-atomic="true">Загружаем содержимое…</p>
+              <p class="cms-global-error" data-cms-error role="alert"></p>
+              <button class="cms-save" type="submit" data-cms-save disabled><span>Сохранить изменения</span><i aria-hidden="true">↗</i></button>
+            </div>
+          </form>
+        </section>
+        <section class="cms-panel cms-preview" aria-labelledby="cms-preview-title">
+          <div class="cms-preview__header"><h2 class="cms-kicker" id="cms-preview-title">Предпросмотр</h2><span class="cms-preview__live">В реальном времени</span></div>
+          <div data-cms-photo-switch></div>
+          <div class="cms-preview__canvas">
+            <div class="cms-preview__browser"><span>MAHARA</span><span class="cms-preview__dots" aria-hidden="true"><i></i><i></i><i></i></span></div>
+            <div class="cms-preview__content" data-cms-preview><p class="cms-loading">Загружаем предпросмотр…</p></div>
+          </div>
+          <p class="cms-preview__caption">Так будет выглядеть выбранный блок.<br><strong>Сохраните изменения, чтобы увидеть их на сайте.</strong></p>
+        </section>
+      </div>
+      <div class="cms-bottom js-only">
+        <p class="cms-bottom__note">Попробуйте поменять заголовок, загрузить фото<br>или задать новую цену для любимой вещи.</p>
+        <div class="cms-bottom__actions">
+          <button class="cms-reset" type="button" data-cms-reset disabled aria-controls="cms-reset-confirm" aria-expanded="false">Сбросить демо</button>
+          <a class="cms-open-site" href="index.html">Открыть сайт <span aria-hidden="true">↗</span></a>
+        </div>
+      </div>
+      <section class="cms-reset-confirm" id="cms-reset-confirm" hidden aria-labelledby="cms-reset-title">
+        <h2 id="cms-reset-title">Вернуть исходный сайт?</h2>
+        <p>Все изменения текстов, фотографий и товаров в этом демо будут сброшены.</p>
+        <div class="cms-reset-confirm__actions"><button type="button" data-cms-reset-confirm>Да, сбросить демо</button><button type="button" data-cms-reset-cancel>Оставить изменения</button></div>
+      </section>
+    </div>
+  </main>
+  <footer class="cms-footer"><div class="cms-container"><span>© 2026 MAHARA</span><span>Ваш бренд. Ваш почерк.</span></div></footer>
+  <div class="search-panel" id="search-dialog" data-search-panel role="dialog" aria-modal="true" aria-labelledby="search-title" aria-hidden="true" inert tabindex="-1"><button class="search-panel__close" type="button" data-search-close aria-label="Закрыть поиск">×</button><form class="search-panel__form" action="catalog.html" role="search"><label id="search-title" for="site-search">Что вы ищете?</label><div><input id="site-search" name="q" type="search" placeholder="Например, зелёное худи" autocomplete="off" /><button type="submit">Найти →</button></div></form></div>
+  <div class="drawer-overlay" data-drawer-overlay aria-hidden="true"></div>
+  <aside class="cart-drawer" id="cart-dialog" data-cart-drawer role="dialog" aria-modal="true" aria-labelledby="cart-title" aria-hidden="true" inert tabindex="-1"><div class="cart-drawer__header"><div><span id="cart-title">Корзина</span><small data-cart-caption role="status" aria-live="polite" aria-atomic="true">0 товаров</small></div><button type="button" class="cart-close" aria-label="Закрыть корзину">×</button></div><div class="cart-items" data-cart-items></div><div class="cart-empty" data-cart-empty><span>Корзина пока пуста</span><p>Добавьте вещь из нового дропа</p><a href="catalog.html">Открыть каталог →</a></div><div class="cart-drawer__footer" data-cart-footer><div><span>Итого</span><strong data-cart-total>0 ₽</strong></div><button type="button" disabled title="Оформление заказа скоро появится">Перейти к оформлению <i aria-hidden="true">→</i></button><small>Доставка рассчитывается при оформлении</small></div></aside>
+  <div class="quick-view" id="quick-dialog" data-quick-view role="dialog" aria-modal="true" aria-labelledby="quick-title" aria-hidden="true" inert tabindex="-1"><button class="quick-view__close" type="button" aria-label="Закрыть">×</button><div class="quick-view__media"><img alt="" data-quick-image width="853" height="1280" decoding="async" /></div><div class="quick-view__content"><p class="eyebrow" data-quick-label>New drop</p><h2 id="quick-title" data-quick-title></h2><p class="quick-view__description" data-quick-description></p><strong class="quick-view__price" data-quick-price></strong><div class="quick-view__sizes"><span>Размер</span><div data-quick-sizes role="group" aria-label="Выбрать размер"></div></div><button class="button button--primary quick-add" type="button"><span>Добавить в корзину</span><i aria-hidden="true">→</i></button></div></div>
+  <div class="toast" data-toast role="status" aria-live="polite"></div>
+</body>
+</html>
