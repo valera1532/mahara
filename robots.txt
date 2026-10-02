@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /preview/
+Disallow: /tools/
+Sitemap: https://maharussia.ru/sitemap.xml

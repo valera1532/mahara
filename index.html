@@ -4,24 +4,36 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#050505" />
-  <meta name="description" content="MAHARA — премиальная уличная одежда, созданная в России." />
-  <title>MAHARA — Made in Russia</title>
+  <title>MAHARA — российский бренд одежды | Худи и футболки</title>
+  <meta name="description" content="MAHARA — уличная одежда, созданная в России: худи с авторской вышивкой и футболки с арт-принтами, свободная посадка и малые тиражи" />
+  <meta name="robots" content="index, follow, max-image-preview:large" />
+  <link rel="canonical" href="https://maharussia.ru/" />
+  <meta property="og:locale" content="ru_RU" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="MAHARA" />
+  <meta property="og:title" content="MAHARA — российский бренд одежды | Худи и футболки" />
+  <meta property="og:description" content="MAHARA — уличная одежда, созданная в России: худи с авторской вышивкой и футболки с арт-принтами, свободная посадка и малые тиражи" />
+  <meta property="og:url" content="https://maharussia.ru/" />
+  <meta property="og:image" content="https://maharussia.ru/assets/images/social-cover.jpg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="MAHARA — одежда с авторской вышивкой и арт-принтами" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="MAHARA — российский бренд одежды | Худи и футболки" />
+  <meta name="twitter:description" content="MAHARA — уличная одежда, созданная в России: худи с авторской вышивкой и футболки с арт-принтами, свободная посадка и малые тиражи" />
+  <meta name="twitter:image" content="https://maharussia.ru/assets/images/social-cover.jpg" />
+  <meta name="twitter:image:alt" content="MAHARA — российский бренд одежды | Худи и футболки" />
   <link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml" />
-  <script>document.documentElement.classList.add("js")</script>
-  <link rel="stylesheet" href="styles.css?v=20261001-3" />
+  <link rel="stylesheet" href="styles.css?v=20261002-1" />
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://maharussia.ru/#organization","name":"MAHARA","url":"https://maharussia.ru/","logo":"https://maharussia.ru/assets/images/mahara-emblem.webp"},{"@type":"WebSite","@id":"https://maharussia.ru/#website","name":"MAHARA","url":"https://maharussia.ru/","inLanguage":"ru-RU","publisher":{"@id":"https://maharussia.ru/#organization"}},{"@type":"WebPage","@id":"https://maharussia.ru/#page","url":"https://maharussia.ru/","name":"MAHARA — российский бренд одежды","inLanguage":"ru-RU","isPartOf":{"@id":"https://maharussia.ru/#website"},"about":{"@id":"https://maharussia.ru/#organization"}}]}</script>
+  <script defer src="catalog-data.js?v=20261002-1"></script>
+  <script defer src="script.js?v=20261002-1"></script>
 </head>
 <body class="page-home">
+  <a class="skip-link" href="#main-content">Перейти к содержимому</a>
   <div class="site-noise" aria-hidden="true"></div>
   <div class="cursor-dot" aria-hidden="true"></div>
   <div class="cursor-ring" aria-hidden="true"></div>
-
-  <div class="preloader" data-preloader aria-hidden="true">
-    <div class="preloader__mark">
-      <span>MAHARA</span>
-      <small>MADE IN RUSSIA</small>
-    </div>
-    <div class="preloader__line"><i></i></div>
-  </div>
 
   <header class="site-header" data-header>
     <a class="brand" href="index.html" aria-label="MAHARA — на главную">
@@ -39,24 +51,25 @@
       <a href="#story">О бренде</a>
     </nav>
 
-    <div class="header-actions">
-      <button class="icon-button search-trigger" type="button" aria-label="Поиск">
+    <div class="header-actions js-only">
+      <button class="icon-button search-trigger" type="button" aria-label="Поиск" aria-haspopup="dialog" aria-controls="search-dialog" aria-expanded="false">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
       </button>
-      <button class="icon-button desktop-only" type="button" aria-label="Личный кабинет">
+      <button class="icon-button desktop-only" type="button" aria-label="Личный кабинет" disabled title="Скоро появится">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 21c.6-4.2 3.1-6.4 7-6.4s6.4 2.2 7 6.4"/></svg>
       </button>
-      <button class="icon-button cart-trigger" type="button" aria-label="Корзина">
+      <button class="icon-button cart-trigger" type="button" aria-label="Корзина" aria-haspopup="dialog" aria-controls="cart-dialog" aria-expanded="false">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1 13H6L5 8Z"/><path d="M9 9V6a3 3 0 0 1 6 0v3"/></svg>
         <span class="cart-count" data-cart-count>0</span>
       </button>
-      <button class="menu-toggle" type="button" data-menu-toggle aria-label="Открыть меню" aria-expanded="false">
+      <button class="menu-toggle" type="button" data-menu-toggle aria-label="Открыть меню" aria-expanded="false" aria-controls="mobile-menu" aria-haspopup="dialog">
         <span></span><span></span>
       </button>
     </div>
   </header>
 
-  <aside class="mobile-menu" data-mobile-menu aria-hidden="true">
+  <aside class="mobile-menu" id="mobile-menu" data-mobile-menu role="dialog" aria-modal="true" aria-label="Меню" aria-hidden="true" inert tabindex="-1">
+    <button class="mobile-menu__close" type="button" data-menu-close aria-label="Закрыть меню">×</button>
     <div class="mobile-menu__glow"></div>
     <nav aria-label="Мобильная навигация">
       <a href="catalog.html"><span>01</span>Каталог</a>
@@ -71,7 +84,8 @@
     </div>
   </aside>
 
-  <main>
+  <noscript><nav class="no-js-navigation container" aria-label="Навигация"><a href="catalog.html">Каталог</a><a href="index.html#lookbook">Lookbook</a><a href="index.html#story">О бренде</a></nav></noscript>
+  <main id="main-content" tabindex="-1">
     <section class="hero" id="top" data-hero>
       <div class="hero__ambient hero__ambient--one"></div>
       <div class="hero__ambient hero__ambient--two"></div>
@@ -87,29 +101,29 @@
 
       <div class="hero-photo hero-photo--left" data-parallax="-18">
         <div class="hero-photo__frame"></div>
-        <img src="assets/images/hero-man.webp" alt="Мужчина в чёрном худи MAHARA" />
+        <img src="assets/images/hero-man.webp" alt="Мужчина в чёрном худи MAHARA" width="853" height="1280" decoding="async" fetchpriority="high" />
       </div>
       <div class="hero-photo hero-photo--right" data-parallax="18">
         <div class="hero-photo__frame"></div>
-        <img src="assets/images/hero-woman.webp" alt="Девушка в чёрном худи MAHARA" />
+        <img src="assets/images/hero-woman.webp" alt="Девушка в чёрном худи MAHARA" width="853" height="1280" decoding="async" />
       </div>
       <div class="hero-photo hero-photo--edge-left" data-parallax="-9" aria-hidden="true">
-        <img src="assets/images/hero-slate.webp" alt="" />
+        <img src="assets/images/hero-slate.webp" alt="" width="853" height="1280" decoding="async" loading="lazy" />
       </div>
       <div class="hero-photo hero-photo--edge-right" data-parallax="10" aria-hidden="true">
-        <img src="assets/images/hero-green-back.webp" alt="" />
+        <img src="assets/images/hero-green-back.webp" alt="" width="853" height="1280" decoding="async" loading="lazy" />
       </div>
 
       <div class="hero__content container">
         <p class="eyebrow hero-reveal">Уличная культура <span></span> Российский дух</p>
-        <h1 class="hero-title hero-reveal" aria-label="MAHARA">
+        <h1 class="hero-title hero-reveal">
           <span class="hero-title__main">MAHARA</span>
           <span class="hero-title__sub">MADE IN RUSSIA</span>
         </h1>
         <p class="hero__copy hero-reveal">Премиальная одежда с авторской вышивкой и арт‑принтами<br>Малые тиражи для тех, кто не хочет выглядеть как все</p>
         <div class="hero__actions hero-reveal">
           <a class="button button--primary magnetic" href="#drop"><span>Смотреть дроп</span><i>↗</i></a>
-          <a class="button button--ghost magnetic" href="catalog.html"><span>Каталог</span><i>→</i></a>
+          <a class="button button--ghost magnetic" href="catalog.html"><span>Каталог</span><i aria-hidden="true">→</i></a>
         </div>
         <div class="hero__meta hero-reveal">
           <div><strong>01</strong><span>Создано<br>в России</span></div>
@@ -136,27 +150,27 @@
         <div class="category-grid">
           <a class="category-card category-card--hoodie reveal" id="hoodies" href="catalog.html?category=hoodie">
             <div class="category-card__media">
-              <img class="category-card__back" src="assets/images/green-hoodie-back.webp" alt="Зелёное худи MAHARA, вид сзади" />
-              <img class="category-card__front" src="assets/images/hero-man.webp" alt="Чёрное худи MAHARA" />
+              <img class="category-card__back" src="assets/images/green-hoodie-back.webp" alt="Зелёное худи MAHARA, вид сзади" width="853" height="1280" decoding="async" loading="lazy" />
+              <img class="category-card__front" src="assets/images/hero-man.webp" alt="Чёрное худи MAHARA" width="853" height="1280" decoding="async" fetchpriority="high" />
             </div>
             <div class="category-card__topline"><span>01</span><span>Embroidery collection</span></div>
             <div class="category-card__body">
               <h3>Худи</h3>
               <p>Плотный хлопок, объёмная посадка и десятки деталей, которые хочется рассматривать</p>
-              <span class="text-link">Смотреть все <i>→</i></span>
+              <span class="text-link">Смотреть все <i aria-hidden="true">→</i></span>
             </div>
           </a>
 
           <a class="category-card category-card--tee reveal" id="tshirts" href="catalog.html?category=tee">
             <div class="category-card__media">
-              <img class="category-card__back" src="assets/images/white-last-supper.webp" alt="Белая футболка MAHARA с арт-принтом" />
-              <img class="category-card__front" src="assets/images/slate-tee.webp" alt="Синяя футболка MAHARA с вышивкой" />
+              <img class="category-card__back" src="assets/images/white-last-supper.webp" alt="Белая футболка MAHARA с арт-принтом" width="853" height="1280" decoding="async" loading="lazy" />
+              <img class="category-card__front" src="assets/images/slate-tee.webp" alt="Синяя футболка MAHARA с вышивкой" width="853" height="1280" decoding="async" loading="lazy" />
             </div>
             <div class="category-card__topline"><span>02</span><span>Art & embroidery</span></div>
             <div class="category-card__body">
               <h3>Футболки</h3>
               <p>Свободный крой, плотная ткань и принты, которые превращают футболку в высказывание</p>
-              <span class="text-link">Смотреть все <i>→</i></span>
+              <span class="text-link">Смотреть все <i aria-hidden="true">→</i></span>
             </div>
           </a>
         </div>
@@ -170,16 +184,85 @@
             <p class="eyebrow">New drop / 01</p>
             <h2>Главные вещи<br><em>этого сезона</em></h2>
           </div>
-          <a class="button button--ghost" href="catalog.html"><span>Весь каталог</span><i>→</i></a>
+          <a class="button button--ghost" href="catalog.html"><span>Весь каталог</span><i aria-hidden="true">→</i></a>
         </div>
 
-        <div class="product-track" data-product-grid="featured" aria-label="Новый дроп"></div>
+        <div class="product-track" data-product-grid="featured" role="group" aria-label="Новый дроп"><!-- products:featured -->
+<article class="product-card reveal" data-product-id="hoodie-black" data-category="hoodie" data-color="black">
+      <div class="product-card__media">
+        <span class="product-card__badge">New drop</span>
+        <button class="product-card__favorite js-only" type="button" data-favorite aria-pressed="false" aria-label="Добавить Худи MAHARA Black в избранное"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.7a5.6 5.6 0 0 0-7.9 0L12 5.6l-.9-.9a5.6 5.6 0 1 0-7.9 7.9l.9.9L12 21l7.9-7.5.9-.9a5.6 5.6 0 0 0 0-7.9Z"/></svg></button>
+        <a class="product-card__image-link" href="product-hoodie-black.html" aria-label="Худи MAHARA Black — подробнее"><img class="product-card__image" src="assets/images/black-hoodie.webp" alt="Худи MAHARA Black" width="853" height="1280" loading="lazy" decoding="async" /></a>
+        <button class="product-card__quick js-only" type="button" data-quick-open aria-haspopup="dialog" aria-controls="quick-dialog" aria-label="Быстрый просмотр: Худи MAHARA Black">Быстрый просмотр</button>
+      </div>
+      <div class="product-card__body">
+        <span class="product-card__label">Худи / Вышивка</span>
+        <h3><a href="product-hoodie-black.html">Худи MAHARA Black</a></h3>
+        <p class="product-card__subtitle">Embroidery / Oversize</p>
+        <strong class="product-card__price">16 900 ₽</strong>
+        <div class="product-card__sizes js-only" role="group" aria-label="Размер Худи MAHARA Black"><button type="button" data-size-choice="S" class="" aria-pressed="false" aria-label="Размер S">S</button><button type="button" data-size-choice="M" class="is-active" aria-pressed="true" aria-label="Размер M">M</button><button type="button" data-size-choice="L" class="" aria-pressed="false" aria-label="Размер L">L</button><button type="button" data-size-choice="XL" class="" aria-pressed="false" aria-label="Размер XL">XL</button><button type="button" data-size-choice="XXL" class="" aria-pressed="false" aria-label="Размер XXL">XXL</button></div>
+        <p class="product-card__available-sizes no-js-only">Размеры: S, M, L, XL, XXL</p>
+        <button class="product-card__add js-only" type="button" data-add-cart aria-label="Добавить Худи MAHARA Black в корзину">В корзину</button>
+      </div>
+    </article>
+<article class="product-card reveal" data-product-id="hoodie-green" data-category="hoodie" data-color="green">
+      <div class="product-card__media">
+        <span class="product-card__badge">New drop</span>
+        <button class="product-card__favorite js-only" type="button" data-favorite aria-pressed="false" aria-label="Добавить Худи MAHARA Green в избранное"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.7a5.6 5.6 0 0 0-7.9 0L12 5.6l-.9-.9a5.6 5.6 0 1 0-7.9 7.9l.9.9L12 21l7.9-7.5.9-.9a5.6 5.6 0 0 0 0-7.9Z"/></svg></button>
+        <a class="product-card__image-link" href="product-hoodie-green.html" aria-label="Худи MAHARA Green — подробнее"><img class="product-card__image" src="assets/images/green-hoodie.webp" alt="Худи MAHARA Green" width="853" height="1280" loading="lazy" decoding="async" /></a>
+        <button class="product-card__quick js-only" type="button" data-quick-open aria-haspopup="dialog" aria-controls="quick-dialog" aria-label="Быстрый просмотр: Худи MAHARA Green">Быстрый просмотр</button>
+      </div>
+      <div class="product-card__body">
+        <span class="product-card__label">Худи / Вышивка</span>
+        <h3><a href="product-hoodie-green.html">Худи MAHARA Green</a></h3>
+        <p class="product-card__subtitle">Embroidery / Oversize</p>
+        <strong class="product-card__price">16 900 ₽</strong>
+        <div class="product-card__sizes js-only" role="group" aria-label="Размер Худи MAHARA Green"><button type="button" data-size-choice="S" class="" aria-pressed="false" aria-label="Размер S">S</button><button type="button" data-size-choice="M" class="is-active" aria-pressed="true" aria-label="Размер M">M</button><button type="button" data-size-choice="L" class="" aria-pressed="false" aria-label="Размер L">L</button><button type="button" data-size-choice="XL" class="" aria-pressed="false" aria-label="Размер XL">XL</button><button type="button" data-size-choice="XXL" class="" aria-pressed="false" aria-label="Размер XXL">XXL</button></div>
+        <p class="product-card__available-sizes no-js-only">Размеры: S, M, L, XL, XXL</p>
+        <button class="product-card__add js-only" type="button" data-add-cart aria-label="Добавить Худи MAHARA Green в корзину">В корзину</button>
+      </div>
+    </article>
+<article class="product-card reveal" data-product-id="tee-slate" data-category="tee" data-color="slate">
+      <div class="product-card__media">
+        <span class="product-card__badge">New drop</span>
+        <button class="product-card__favorite js-only" type="button" data-favorite aria-pressed="false" aria-label="Добавить Футболка MAHARA Slate в избранное"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.7a5.6 5.6 0 0 0-7.9 0L12 5.6l-.9-.9a5.6 5.6 0 1 0-7.9 7.9l.9.9L12 21l7.9-7.5.9-.9a5.6 5.6 0 0 0 0-7.9Z"/></svg></button>
+        <a class="product-card__image-link" href="product-tee-slate.html" aria-label="Футболка MAHARA Slate — подробнее"><img class="product-card__image" src="assets/images/slate-tee.webp" alt="Футболка MAHARA Slate" width="853" height="1280" loading="lazy" decoding="async" /></a>
+        <button class="product-card__quick js-only" type="button" data-quick-open aria-haspopup="dialog" aria-controls="quick-dialog" aria-label="Быстрый просмотр: Футболка MAHARA Slate">Быстрый просмотр</button>
+      </div>
+      <div class="product-card__body">
+        <span class="product-card__label">Футболка / Арт</span>
+        <h3><a href="product-tee-slate.html">Футболка MAHARA Slate</a></h3>
+        <p class="product-card__subtitle">Embroidery / Heavy cotton</p>
+        <strong class="product-card__price">7 900 ₽</strong>
+        <div class="product-card__sizes js-only" role="group" aria-label="Размер Футболка MAHARA Slate"><button type="button" data-size-choice="S" class="" aria-pressed="false" aria-label="Размер S">S</button><button type="button" data-size-choice="M" class="is-active" aria-pressed="true" aria-label="Размер M">M</button><button type="button" data-size-choice="L" class="" aria-pressed="false" aria-label="Размер L">L</button><button type="button" data-size-choice="XL" class="" aria-pressed="false" aria-label="Размер XL">XL</button><button type="button" data-size-choice="XXL" class="" aria-pressed="false" aria-label="Размер XXL">XXL</button></div>
+        <p class="product-card__available-sizes no-js-only">Размеры: S, M, L, XL, XXL</p>
+        <button class="product-card__add js-only" type="button" data-add-cart aria-label="Добавить Футболка MAHARA Slate в корзину">В корзину</button>
+      </div>
+    </article>
+<article class="product-card reveal" data-product-id="tee-burgundy" data-category="tee" data-color="burgundy">
+      <div class="product-card__media">
+        <span class="product-card__badge">Bestseller</span>
+        <button class="product-card__favorite js-only" type="button" data-favorite aria-pressed="false" aria-label="Добавить Футболка Last Supper Burgundy в избранное"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.7a5.6 5.6 0 0 0-7.9 0L12 5.6l-.9-.9a5.6 5.6 0 1 0-7.9 7.9l.9.9L12 21l7.9-7.5.9-.9a5.6 5.6 0 0 0 0-7.9Z"/></svg></button>
+        <a class="product-card__image-link" href="product-tee-burgundy.html" aria-label="Футболка Last Supper Burgundy — подробнее"><img class="product-card__image" src="assets/images/burgundy-tee-angle.webp" alt="Футболка Last Supper Burgundy" width="853" height="1280" loading="lazy" decoding="async" /></a>
+        <button class="product-card__quick js-only" type="button" data-quick-open aria-haspopup="dialog" aria-controls="quick-dialog" aria-label="Быстрый просмотр: Футболка Last Supper Burgundy">Быстрый просмотр</button>
+      </div>
+      <div class="product-card__body">
+        <span class="product-card__label">Футболка / Арт</span>
+        <h3><a href="product-tee-burgundy.html">Футболка Last Supper Burgundy</a></h3>
+        <p class="product-card__subtitle">Art print / Heavy cotton</p>
+        <strong class="product-card__price">6 900 ₽</strong>
+        <div class="product-card__sizes js-only" role="group" aria-label="Размер Футболка Last Supper Burgundy"><button type="button" data-size-choice="S" class="" aria-pressed="false" aria-label="Размер S">S</button><button type="button" data-size-choice="M" class="is-active" aria-pressed="true" aria-label="Размер M">M</button><button type="button" data-size-choice="L" class="" aria-pressed="false" aria-label="Размер L">L</button><button type="button" data-size-choice="XL" class="" aria-pressed="false" aria-label="Размер XL">XL</button></div>
+        <p class="product-card__available-sizes no-js-only">Размеры: S, M, L, XL</p>
+        <button class="product-card__add js-only" type="button" data-add-cart aria-label="Добавить Футболка Last Supper Burgundy в корзину">В корзину</button>
+      </div>
+    </article>
+<!-- /products:featured --></div>
       </div>
     </section>
 
     <section class="campaign section" aria-label="Кампания MAHARA">
       <div class="campaign__media reveal">
-        <img src="assets/images/green-tee-seated.webp" alt="Модель в зелёной футболке MAHARA" />
+        <img src="assets/images/green-tee-seated.webp" alt="Модель в зелёной футболке MAHARA" width="853" height="1280" decoding="async" loading="lazy" />
         <div class="campaign__shade"></div>
       </div>
       <div class="campaign__content container">
@@ -202,12 +285,12 @@
       </div>
 
       <div class="lookbook-slider" id="lookbook-track" data-lookbook-slider tabindex="0" role="region" aria-roledescription="карусель" aria-label="Lookbook — образы MAHARA">
-        <figure class="lookbook-card lookbook-card--wide reveal" role="group" aria-roledescription="слайд" aria-label="1 из 6: Black hoodie"><img src="assets/images/hero-woman.webp" alt="Девушка в чёрном худи MAHARA" /><figcaption><span>01</span>Black hoodie</figcaption></figure>
-        <figure class="lookbook-card reveal" role="group" aria-roledescription="слайд" aria-label="2 из 6: Last Supper / Green"><img src="assets/images/green-tee.webp" alt="Мужчина в зелёной футболке MAHARA" /><figcaption><span>02</span>Last Supper / Green</figcaption></figure>
-        <figure class="lookbook-card lookbook-card--tall reveal" role="group" aria-roledescription="слайд" aria-label="3 из 6: Last Supper / Burgundy"><img src="assets/images/burgundy-tee-angle.webp" alt="Мужчина в бордовой футболке MAHARA" /><figcaption><span>03</span>Last Supper / Burgundy</figcaption></figure>
-        <figure class="lookbook-card reveal" role="group" aria-roledescription="слайд" aria-label="4 из 6: Green hoodie"><img src="assets/images/green-hoodie.webp" alt="Мужчина в зелёном худи MAHARA" /><figcaption><span>04</span>Green hoodie</figcaption></figure>
-        <figure class="lookbook-card lookbook-card--wide reveal" role="group" aria-roledescription="слайд" aria-label="5 из 6: Last Supper / White"><img src="assets/images/white-last-supper.webp" alt="Мужчина в белой футболке MAHARA" /><figcaption><span>05</span>Last Supper / White</figcaption></figure>
-        <figure class="lookbook-card reveal" role="group" aria-roledescription="слайд" aria-label="6 из 6: Slate / Back"><img src="assets/images/slate-tee-back.webp" alt="Футболка MAHARA, вид сзади" /><figcaption><span>06</span>Slate / Back</figcaption></figure>
+        <figure class="lookbook-card lookbook-card--wide reveal" role="group" aria-roledescription="слайд" aria-label="1 из 6: Black hoodie"><img src="assets/images/hero-woman.webp" alt="Девушка в чёрном худи MAHARA" width="853" height="1280" decoding="async" loading="lazy" /><figcaption><span>01</span>Black hoodie</figcaption></figure>
+        <figure class="lookbook-card reveal" role="group" aria-roledescription="слайд" aria-label="2 из 6: Last Supper / Green"><img src="assets/images/green-tee.webp" alt="Мужчина в зелёной футболке MAHARA" width="853" height="1280" decoding="async" loading="lazy" /><figcaption><span>02</span>Last Supper / Green</figcaption></figure>
+        <figure class="lookbook-card lookbook-card--tall reveal" role="group" aria-roledescription="слайд" aria-label="3 из 6: Last Supper / Burgundy"><img src="assets/images/burgundy-tee-angle.webp" alt="Мужчина в бордовой футболке MAHARA" width="853" height="1280" decoding="async" loading="lazy" /><figcaption><span>03</span>Last Supper / Burgundy</figcaption></figure>
+        <figure class="lookbook-card reveal" role="group" aria-roledescription="слайд" aria-label="4 из 6: Green hoodie"><img src="assets/images/green-hoodie.webp" alt="Мужчина в зелёном худи MAHARA" width="853" height="1280" decoding="async" loading="lazy" /><figcaption><span>04</span>Green hoodie</figcaption></figure>
+        <figure class="lookbook-card lookbook-card--wide reveal" role="group" aria-roledescription="слайд" aria-label="5 из 6: Last Supper / White"><img src="assets/images/white-last-supper.webp" alt="Мужчина в белой футболке MAHARA" width="853" height="1280" decoding="async" loading="lazy" /><figcaption><span>05</span>Last Supper / White</figcaption></figure>
+        <figure class="lookbook-card reveal" role="group" aria-roledescription="слайд" aria-label="6 из 6: Slate / Back"><img src="assets/images/slate-tee-back.webp" alt="Футболка MAHARA, вид сзади" width="853" height="1280" decoding="async" loading="lazy" /><figcaption><span>06</span>Slate / Back</figcaption></figure>
       </div>
       <nav class="container lookbook-controls" aria-label="Навигация lookbook">
         <button class="lookbook-arrow lookbook-arrow--prev" type="button" data-lookbook-prev aria-label="Предыдущая позиция" aria-controls="lookbook-track" disabled><span aria-hidden="true">←</span></button>
@@ -219,8 +302,8 @@
     <section class="story section" id="story">
       <div class="container story__grid">
         <div class="story__visual reveal">
-          <div class="story__picture story__picture--main"><img src="assets/images/black-last-supper.webp" alt="Чёрная футболка MAHARA с арт-принтом" /></div>
-          <div class="story__picture story__picture--float"><img src="assets/images/green-tee-close.webp" alt="Зелёная футболка MAHARA с арт-принтом" /></div>
+          <div class="story__picture story__picture--main"><img src="assets/images/black-last-supper.webp" alt="Чёрная футболка MAHARA с арт-принтом" width="853" height="1280" decoding="async" loading="lazy" /></div>
+          <div class="story__picture story__picture--float"><img src="assets/images/green-tee-close.webp" alt="Зелёная футболка MAHARA с арт-принтом" width="853" height="1280" decoding="async" loading="lazy" /></div>
           <span class="story__stamp">MADE<br>IN<br>RUSSIA</span>
         </div>
         <div class="story__copy reveal">
@@ -242,12 +325,12 @@
       <div class="container newsletter__inner reveal">
         <p class="eyebrow">Первым увидеть новый дроп</p>
         <h2>Никакого спама<br><em>Только вещи по делу</em></h2>
-        <form class="newsletter-form" data-newsletter-form>
+        <form class="newsletter-form js-only" data-newsletter-form>
           <label class="sr-only" for="email">Электронная почта</label>
-          <input id="email" name="email" type="email" placeholder="Ваш e-mail" required />
-          <button type="submit"><span>Подписаться</span><i>→</i></button>
+          <input id="email" name="email" type="email" placeholder="Ваш e-mail" autocomplete="email" required aria-describedby="newsletter-note" />
+          <button type="submit"><span>Подписаться</span><i aria-hidden="true">→</i></button>
         </form>
-        <p class="newsletter__note">Нажимая «Подписаться», вы соглашаетесь с политикой обработки данных</p>
+        <p class="newsletter__note" id="newsletter-note">Подписка скоро появится</p>
       </div>
     </section>
   </main>
@@ -255,49 +338,48 @@
   <footer class="site-footer">
     <div class="container site-footer__top">
       <a class="footer-brand" href="#top">MAHARA <small>MADE IN RUSSIA</small></a>
-      <div class="footer-links">
+      <nav class="footer-links" aria-label="Навигация в подвале">
         <div><span>Shop</span><a href="catalog.html">Каталог</a><a href="catalog.html?category=hoodie">Худи</a><a href="catalog.html?category=tee">Футболки</a></div>
-        <div><span>Info</span><a href="#story">О бренде</a><a href="#">Доставка и оплата</a><a href="#">Обмен и возврат</a></div>
-        <div><span>Social</span><a href="#">Telegram</a><a href="#">VK</a><a href="#">Instagram*</a></div>
-      </div>
+        <div><span>Info</span><a href="#story">О бренде</a><span class="footer-placeholder">Доставка и оплата</span><span class="footer-placeholder">Обмен и возврат</span></div>
+        <div><span>Social</span><span class="footer-placeholder">Telegram</span><span class="footer-placeholder">VK</span><span class="footer-placeholder">Instagram*</span></div>
+      </nav>
     </div>
     <div class="container site-footer__bottom"><span>© 2026 MAHARA</span><span>Сделано в России</span></div>
   </footer>
 
-  <div class="search-panel" data-search-panel aria-hidden="true">
+  <div class="search-panel" id="search-dialog" data-search-panel role="dialog" aria-modal="true" aria-labelledby="search-title" aria-hidden="true" inert tabindex="-1">
     <button class="search-panel__close" type="button" data-search-close aria-label="Закрыть поиск">×</button>
-    <form class="search-panel__form" action="catalog.html">
-      <label for="site-search">Что вы ищете?</label>
+    <form class="search-panel__form" action="catalog.html" role="search">
+      <label id="search-title" for="site-search">Что вы ищете?</label>
       <div><input id="site-search" name="q" type="search" placeholder="Например, зелёное худи" autocomplete="off" /><button type="submit">Найти →</button></div>
     </form>
   </div>
 
-  <div class="drawer-overlay" data-drawer-overlay></div>
-  <aside class="cart-drawer" data-cart-drawer aria-hidden="true">
-    <div class="cart-drawer__header"><div><span>Корзина</span><small data-cart-caption>0 товаров</small></div><button type="button" class="cart-close" aria-label="Закрыть корзину">×</button></div>
+  <div class="drawer-overlay" data-drawer-overlay aria-hidden="true"></div>
+  <aside class="cart-drawer" id="cart-dialog" data-cart-drawer role="dialog" aria-modal="true" aria-labelledby="cart-title" aria-hidden="true" inert tabindex="-1">
+    <div class="cart-drawer__header"><div><span id="cart-title">Корзина</span><small data-cart-caption role="status" aria-live="polite" aria-atomic="true">0 товаров</small></div><button type="button" class="cart-close" aria-label="Закрыть корзину">×</button></div>
     <div class="cart-items" data-cart-items></div>
     <div class="cart-empty" data-cart-empty><span>Корзина пока пуста</span><p>Добавьте вещь из нового дропа</p><a href="catalog.html">Открыть каталог →</a></div>
     <div class="cart-drawer__footer" data-cart-footer>
       <div><span>Итого</span><strong data-cart-total>0 ₽</strong></div>
-      <button type="button">Перейти к оформлению <i>→</i></button>
+      <button type="button" disabled title="Оформление заказа скоро появится">Перейти к оформлению <i aria-hidden="true">→</i></button>
       <small>Доставка рассчитывается при оформлении</small>
     </div>
   </aside>
 
-  <div class="quick-view" data-quick-view aria-hidden="true">
+  <div class="quick-view" id="quick-dialog" data-quick-view role="dialog" aria-modal="true" aria-labelledby="quick-title" aria-hidden="true" inert tabindex="-1">
     <button class="quick-view__close" type="button" aria-label="Закрыть">×</button>
-    <div class="quick-view__media"><img src="" alt="" data-quick-image /></div>
+    <div class="quick-view__media"><img alt="" data-quick-image width="853" height="1280" decoding="async" /></div>
     <div class="quick-view__content">
       <p class="eyebrow" data-quick-label>New drop</p>
-      <h2 data-quick-title></h2>
+      <h2 id="quick-title" data-quick-title></h2>
       <p class="quick-view__description" data-quick-description></p>
       <strong class="quick-view__price" data-quick-price></strong>
-      <div class="quick-view__sizes"><span>Размер</span><div data-quick-sizes></div></div>
-      <button class="button button--primary quick-add" type="button"><span>Добавить в корзину</span><i>→</i></button>
+      <div class="quick-view__sizes"><span>Размер</span><div data-quick-sizes role="group" aria-label="Выбрать размер"></div></div>
+      <button class="button button--primary quick-add" type="button"><span>Добавить в корзину</span><i aria-hidden="true">→</i></button>
     </div>
   </div>
 
   <div class="toast" data-toast role="status" aria-live="polite"></div>
-  <script src="script.js?v=20261001-3"></script>
 </body>
 </html>

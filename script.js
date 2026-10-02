@@ -1,112 +1,8 @@
 (() => {
   'use strict';
 
-  const PRODUCTS = [
-    {
-      id: 'hoodie-black',
-      title: 'Худи MAHARA Black',
-      subtitle: 'Embroidery / Oversize',
-      category: 'hoodie',
-      color: 'black',
-      price: 16900,
-      image: 'assets/images/black-hoodie.webp',
-      altImage: 'assets/images/black-hoodie-woman.webp',
-      label: 'New drop',
-      sizes: ['S', 'M', 'L', 'XL', 'XXL'],
-      description: 'Чёрное худи свободного кроя из плотного хлопка; авторская вышивка с архитектурными символами, мягкая изнанка и глубокий капюшон'
-    },
-    {
-      id: 'hoodie-green',
-      title: 'Худи MAHARA Green',
-      subtitle: 'Embroidery / Oversize',
-      category: 'hoodie',
-      color: 'green',
-      price: 16900,
-      image: 'assets/images/green-hoodie.webp',
-      altImage: 'assets/images/green-hoodie-back.webp',
-      label: 'New drop',
-      sizes: ['S', 'M', 'L', 'XL', 'XXL'],
-      description: 'Тёмно-зелёное худи с вышивкой по всей поверхности; плотная ткань держит форму, а объёмный силуэт подходит для многослойных образов'
-    },
-    {
-      id: 'tee-slate',
-      title: 'Футболка MAHARA Slate',
-      subtitle: 'Embroidery / Heavy cotton',
-      category: 'tee',
-      color: 'slate',
-      price: 7900,
-      image: 'assets/images/slate-tee.webp',
-      altImage: 'assets/images/slate-tee-back.webp',
-      label: 'New drop',
-      sizes: ['S', 'M', 'L', 'XL', 'XXL'],
-      description: 'Футболка из плотного хлопка со свободной посадкой и небольшой вышивкой с российскими архитектурными мотивами'
-    },
-    {
-      id: 'tee-burgundy',
-      title: 'Футболка Last Supper Burgundy',
-      subtitle: 'Art print / Heavy cotton',
-      category: 'tee',
-      color: 'burgundy',
-      price: 6900,
-      image: 'assets/images/burgundy-tee-angle.webp',
-      altImage: 'assets/images/burgundy-tee.webp',
-      label: 'Bestseller',
-      sizes: ['S', 'M', 'L', 'XL'],
-      description: 'Бордовая футболка с крупным арт-принтом; плотный хлопок, свободный силуэт и изображение, которое считывается как самостоятельное высказывание'
-    },
-    {
-      id: 'tee-white',
-      title: 'Футболка Last Supper White',
-      subtitle: 'Art print / Heavy cotton',
-      category: 'tee',
-      color: 'white',
-      price: 6900,
-      image: 'assets/images/white-last-supper.webp',
-      altImage: 'assets/images/green-tee-close.webp',
-      label: 'New drop',
-      sizes: ['S', 'M', 'L', 'XL'],
-      description: 'Белая футболка с контрастным арт-принтом, плотным воротом и свободной посадкой; базовый цвет делает графику главным акцентом'
-    },
-    {
-      id: 'tee-black',
-      title: 'Футболка Last Supper Black',
-      subtitle: 'Art print / Heavy cotton',
-      category: 'tee',
-      color: 'black',
-      price: 6900,
-      image: 'assets/images/black-last-supper.webp',
-      altImage: 'assets/images/white-last-supper.webp',
-      label: 'Limited',
-      sizes: ['M', 'L', 'XL', 'XXL'],
-      description: 'Чёрная футболка из плотного хлопка с крупным принтом; лимитированная модель из текущего дропа'
-    },
-    {
-      id: 'tee-green',
-      title: 'Футболка Last Supper Green',
-      subtitle: 'Art print / Heavy cotton',
-      category: 'tee',
-      color: 'green',
-      price: 6900,
-      image: 'assets/images/green-tee.webp',
-      altImage: 'assets/images/green-tee-seated.webp',
-      label: 'New color',
-      sizes: ['S', 'M', 'L', 'XL'],
-      description: 'Глубокий зелёный оттенок, свободная посадка и крупный арт-принт; футболка работает и как акцент, и как часть спокойного образа'
-    },
-    {
-      id: 'hoodie-black-female',
-      title: 'Худи MAHARA Black II',
-      subtitle: 'Unisex / Embroidery',
-      category: 'hoodie',
-      color: 'black',
-      price: 16900,
-      image: 'assets/images/black-hoodie-woman.webp',
-      altImage: 'assets/images/black-hoodie.webp',
-      label: 'Unisex',
-      sizes: ['XS', 'S', 'M', 'L', 'XL'],
-      description: 'Унисекс-худи с расслабленной посадкой, объёмным капюшоном и вышивкой по всей поверхности; хорошо сидит на разном типе фигуры'
-    }
-  ];
+  const { products: PRODUCTS, card: productCard } = window.MaharaCatalog;
+  document.documentElement.classList.add('js');
 
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
@@ -145,41 +41,28 @@
     try { localStorage.setItem('maharaCart', JSON.stringify(state.cart)); } catch { /* preview/file mode */ }
   }
 
-  function productCard(product, { featured = false } = {}) {
-    const sizes = product.sizes.map((size, index) =>
-      `<button type="button" data-size-choice="${size}" class="${index === 1 ? 'is-active' : ''}" aria-label="Размер ${size}">${size}</button>`
-    ).join('');
-
-    return `
-      <article class="product-card reveal" data-product-id="${product.id}" data-category="${product.category}" data-color="${product.color}">
-        <div class="product-card__media">
-          <span class="product-card__badge">${product.label}</span>
-          <button class="product-card__favorite" type="button" data-favorite aria-label="Добавить в избранное">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.7a5.6 5.6 0 0 0-7.9 0L12 5.6l-.9-.9a5.6 5.6 0 1 0-7.9 7.9l.9.9L12 21l7.9-7.5.9-.9a5.6 5.6 0 0 0 0-7.9Z"/></svg>
-          </button>
-          <img class="product-card__image" src="${product.image}" alt="${product.title}" loading="lazy" />
-          <button class="product-card__quick" type="button" data-quick-open>Быстрый просмотр</button>
-        </div>
-        <div class="product-card__body">
-          <span class="product-card__label">${product.category === 'hoodie' ? 'Худи / Вышивка' : 'Футболка / Арт'}</span>
-          <h3>${product.title}</h3>
-          <p class="product-card__subtitle">${product.subtitle}</p>
-          <strong class="product-card__price">${formatPrice(product.price)}</strong>
-          <div class="product-card__sizes" aria-label="Выберите размер">${sizes}</div>
-          <button class="product-card__add" type="button" data-add-cart>В корзину</button>
-        </div>
-      </article>`;
-  }
+  const initialProductGrids = new WeakMap();
 
   function renderProducts() {
     $$('[data-product-grid]').forEach(grid => {
       const type = grid.dataset.productGrid;
       const products = type === 'featured' ? PRODUCTS.slice(0, 4) : filteredProducts();
-      grid.innerHTML = products.map(product => productCard(product, { featured: type === 'featured' })).join('');
+      const currentIds = $$('.product-card', grid).map(card => card.dataset.productId).join('|');
+      if (!initialProductGrids.has(grid)) initialProductGrids.set(grid, { html: grid.innerHTML, ids: currentIds });
+      const desiredIds = products.map(product => product.id).join('|');
+      if (currentIds !== desiredIds) {
+        const initial = initialProductGrids.get(grid);
+        grid.innerHTML = desiredIds === initial.ids ? initial.html : products.map(product => productCard(product)).join('');
+      }
       if (type === 'catalog') {
         const count = $('[data-results-count]');
         const empty = $('[data-catalog-empty]');
-        if (count) count.textContent = pluralProducts(products.length);
+        if (count) {
+          count.setAttribute('role', 'status');
+          count.setAttribute('aria-live', 'polite');
+          count.setAttribute('aria-atomic', 'true');
+          count.textContent = pluralProducts(products.length);
+        }
         if (empty) empty.classList.toggle('is-visible', products.length === 0);
       }
       bindProductCards(grid);
@@ -205,19 +88,27 @@
   }
 
   function bindProductCards(root) {
-    $$('.product-card', root).forEach(card => {
+    $$('.product-card, [data-product-detail]', root).forEach(card => {
       const product = PRODUCTS.find(item => item.id === card.dataset.productId);
-      if (!product) return;
+      if (!product || card.dataset.productBound) return;
+      card.dataset.productBound = 'true';
 
       $('[data-favorite]', card)?.addEventListener('click', event => {
-        event.currentTarget.classList.toggle('is-active');
-        showToast(event.currentTarget.classList.contains('is-active') ? 'Добавлено в избранное' : 'Удалено из избранного');
+        const button = event.currentTarget;
+        const active = button.classList.toggle('is-active');
+        button.setAttribute('aria-pressed', String(active));
+        button.setAttribute('aria-label', `${active ? 'Удалить из избранного' : 'Добавить в избранное'}: ${product.title}`);
+        showToast(active ? 'Добавлено в избранное' : 'Удалено из избранного');
       });
 
       $$('[data-size-choice]', card).forEach(button => {
         button.addEventListener('click', () => {
-          $$('[data-size-choice]', card).forEach(item => item.classList.remove('is-active'));
+          $$('[data-size-choice]', card).forEach(item => {
+            item.classList.remove('is-active');
+            item.setAttribute('aria-pressed', 'false');
+          });
           button.classList.add('is-active');
+          button.setAttribute('aria-pressed', 'true');
         });
       });
 
@@ -227,6 +118,13 @@
       });
 
       $('[data-quick-open]', card)?.addEventListener('click', () => openQuickView(product));
+      const quickButton = $('[data-quick-open]', card);
+      if (quickButton) {
+        quickButton.setAttribute('aria-haspopup', 'dialog');
+        quickButton.setAttribute('aria-expanded', 'false');
+        const dialogId = $('[data-quick-view]')?.id;
+        if (dialogId) quickButton.setAttribute('aria-controls', dialogId);
+      }
     });
   }
 
@@ -249,13 +147,19 @@
   function updateCartUI() {
     const count = state.cart.reduce((sum, item) => sum + item.qty, 0);
     $$('[data-cart-count]').forEach(node => node.textContent = count);
+    $$('.cart-trigger').forEach(button => button.setAttribute('aria-label', `Корзина, ${pluralProducts(count)}`));
     const caption = $('[data-cart-caption]');
     const totalNode = $('[data-cart-total]');
     const itemsNode = $('[data-cart-items]');
     const emptyNode = $('[data-cart-empty]');
     const footer = $('[data-cart-footer]');
 
-    if (caption) caption.textContent = pluralProducts(count);
+    if (caption) {
+      caption.setAttribute('role', 'status');
+      caption.setAttribute('aria-live', 'polite');
+      caption.setAttribute('aria-atomic', 'true');
+      caption.textContent = pluralProducts(count);
+    }
     if (!itemsNode) return;
 
     const total = state.cart.reduce((sum, item) => {
@@ -264,18 +168,20 @@
     }, 0);
     if (totalNode) totalNode.textContent = formatPrice(total);
 
+    const focusedRemove = document.activeElement?.closest('[data-cart-remove]');
+    const removedIndex = focusedRemove && itemsNode.contains(focusedRemove) ? Number(focusedRemove.dataset.cartRemove) : null;
     itemsNode.innerHTML = state.cart.map((item, index) => {
       const product = PRODUCTS.find(p => p.id === item.id);
       if (!product) return '';
       return `
         <div class="cart-item">
-          <img src="${product.image}" alt="${product.title}" />
+          <img src="${product.image}" alt="${product.title}" width="${product.width}" height="${product.height}" decoding="async" loading="lazy" />
           <div class="cart-item__copy">
             <strong>${product.title}</strong>
             <span>Размер ${item.size} · ${item.qty} шт</span>
             <b>${formatPrice(product.price * item.qty)}</b>
           </div>
-          <button class="cart-item__remove" type="button" data-cart-remove="${index}" aria-label="Удалить">×</button>
+          <button class="cart-item__remove" type="button" data-cart-remove="${index}" aria-label="Удалить из корзины: ${product.title}, размер ${item.size}">×</button>
         </div>`;
     }).join('');
 
@@ -286,17 +192,155 @@
     const hasItems = count > 0;
     if (emptyNode) emptyNode.style.display = hasItems ? 'none' : 'grid';
     if (footer) footer.style.display = hasItems ? 'block' : 'none';
+    if (removedIndex !== null) {
+      const buttons = $$('[data-cart-remove]', itemsNode);
+      (buttons[Math.min(removedIndex, buttons.length - 1)] || $('.cart-close'))?.focus({ preventScroll: true });
+    }
+  }
+
+  const filterViewport = matchMedia('(max-width: 700px)');
+  const menuViewport = matchMedia('(max-width: 920px)');
+  const overlayPanels = [
+    { element: $('[data-mobile-menu]'), bodyClass: 'menu-open', triggers: '[data-menu-toggle]' },
+    { element: $('[data-search-panel]'), bodyClass: 'search-open', triggers: '.search-trigger' },
+    { element: $('[data-cart-drawer]'), bodyClass: 'drawer-open', triggers: '.cart-trigger' },
+    { element: $('[data-quick-view]'), bodyClass: 'modal-open', triggers: '[data-quick-open]' },
+    { element: $('[data-filter-panel]'), bodyClass: 'filter-open', triggers: '[data-filter-open]' }
+  ].filter(panel => panel.element);
+  const changedInert = new Map();
+  let activeOverlay = null;
+  let overlayOpener = null;
+
+  const visibleControl = element => element && element.getClientRects().length > 0 &&
+    getComputedStyle(element).visibility !== 'hidden' && !element.closest('[inert]');
+
+  const focusableControls = panel => $$('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])', panel)
+    .filter(element => visibleControl(element) && element.tabIndex >= 0);
+
+  function restoreBackground() {
+    changedInert.forEach((wasInert, element) => { element.inert = wasInert; });
+    changedInert.clear();
+  }
+
+  function setBackgroundInert(element, inert) {
+    if (!changedInert.has(element)) changedInert.set(element, element.inert);
+    element.inert = inert;
+  }
+
+  function syncOverlayState() {
+    restoreBackground();
+    overlayPanels.forEach(panel => {
+      const isFilter = panel.element.matches('[data-filter-panel]');
+      const desktopFilter = isFilter && !filterViewport.matches;
+      const open = panel.element === activeOverlay;
+      document.body.classList.toggle(panel.bodyClass, open);
+      panel.element.inert = !desktopFilter && !open;
+      panel.element.setAttribute('aria-hidden', String(!desktopFilter && !open));
+      if (isFilter) {
+        panel.element.setAttribute('role', desktopFilter ? 'region' : 'dialog');
+        if (!panel.element.hasAttribute('aria-label') && !panel.element.hasAttribute('aria-labelledby')) panel.element.setAttribute('aria-label', 'Фильтры');
+        if (desktopFilter) panel.element.removeAttribute('aria-modal');
+        else panel.element.setAttribute('aria-modal', 'true');
+      }
+      $$(panel.triggers).forEach(trigger => {
+        trigger.setAttribute('aria-expanded', String(open));
+        if (panel.element.id) trigger.setAttribute('aria-controls', panel.element.id);
+      });
+    });
+    if (!activeOverlay) return;
+
+    const drawingOverlay = $('[data-drawer-overlay]');
+    const statusToast = $('[data-toast]');
+    for (let current = activeOverlay; current && current !== document.body; current = current.parentElement) {
+      setBackgroundInert(current, false);
+      Array.from(current.parentElement?.children || []).forEach(sibling => {
+        if (sibling !== current && sibling !== drawingOverlay && sibling !== statusToast) setBackgroundInert(sibling, true);
+      });
+    }
+  }
+
+  function focusOverlay(panel) {
+    const searchInput = panel.querySelector('input[type="search"]');
+    if (searchInput && !visibleControl(searchInput)) return false;
+    const target = searchInput || focusableControls(panel)[0];
+    if (target) {
+      target.focus({ preventScroll: true });
+    } else if (!panel.querySelector('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')) {
+      panel.setAttribute('tabindex', '-1');
+      panel.focus({ preventScroll: true });
+    }
+    return panel.contains(document.activeElement);
+  }
+
+  function openOverlay(panel) {
+    if (!panel || (panel.matches('[data-filter-panel]') && !filterViewport.matches)) return;
+    if (!activeOverlay) overlayOpener = document.activeElement;
+    activeOverlay = panel;
+    syncOverlayState();
+    const focusDeadline = performance.now() + 1000;
+    const focusWhenReady = () => {
+      if (activeOverlay !== panel || panel.contains(document.activeElement)) return;
+      if (!focusOverlay(panel) && performance.now() < focusDeadline) requestAnimationFrame(focusWhenReady);
+    };
+    focusWhenReady();
+  }
+
+  function closeOverlay(panel = activeOverlay, restoreFocus = true) {
+    if (!panel || panel !== activeOverlay) return;
+    const opener = overlayOpener;
+    activeOverlay = null;
+    overlayOpener = null;
+    syncOverlayState();
+    if (restoreFocus) {
+      const target = visibleControl(opener) && opener !== document.body && !opener.matches(':disabled') ? opener : $('.brand');
+      if (visibleControl(target)) target.focus({ preventScroll: true });
+    }
+  }
+
+  function setupOverlayAccessibility() {
+    syncOverlayState();
+    menuViewport.addEventListener('change', () => {
+      if (!menuViewport.matches) closeOverlay($('[data-mobile-menu]'));
+    });
+    filterViewport.addEventListener('change', () => {
+      const filter = $('[data-filter-panel]');
+      const wasOpen = filter && activeOverlay === filter;
+      const hadFocus = filter?.contains(document.activeElement);
+      if (!filterViewport.matches && wasOpen) closeOverlay(filter, false);
+      syncOverlayState();
+      if (!activeOverlay && (wasOpen || hadFocus)) {
+        const target = filterViewport.matches ? $('[data-filter-open]') : filter && focusableControls(filter)[0];
+        target?.focus({ preventScroll: true });
+      }
+    });
+    document.addEventListener('keydown', event => {
+      if (!activeOverlay) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeOverlay();
+      } else if (event.key === 'Tab') {
+        const controls = focusableControls(activeOverlay);
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (!first) {
+          event.preventDefault();
+          focusOverlay(activeOverlay);
+        } else if (!activeOverlay.contains(document.activeElement) ||
+          (event.shiftKey && document.activeElement === first) ||
+          (!event.shiftKey && document.activeElement === last)) {
+          event.preventDefault();
+          (event.shiftKey ? last : first).focus();
+        }
+      }
+    });
   }
 
   function openCart() {
-    document.body.classList.remove('menu-open', 'modal-open', 'search-open');
-    document.body.classList.add('drawer-open');
-    $('[data-cart-drawer]')?.setAttribute('aria-hidden', 'false');
+    openOverlay($('[data-cart-drawer]'));
   }
 
   function closeCart() {
-    document.body.classList.remove('drawer-open');
-    $('[data-cart-drawer]')?.setAttribute('aria-hidden', 'true');
+    closeOverlay($('[data-cart-drawer]'));
   }
 
   function openQuickView(product) {
@@ -305,8 +349,12 @@
     const modal = $('[data-quick-view]');
     if (!modal) return;
 
-    $('[data-quick-image]', modal).src = product.image;
-    $('[data-quick-image]', modal).alt = product.title;
+    const quickImage = $('[data-quick-image]', modal);
+    quickImage.src = product.image;
+    quickImage.alt = product.title;
+    quickImage.width = product.width;
+    quickImage.height = product.height;
+    quickImage.decoding = 'async';
     $('[data-quick-title]', modal).textContent = product.title;
     $('[data-quick-description]', modal).textContent = product.description;
     $('[data-quick-price]', modal).textContent = formatPrice(product.price);
@@ -314,24 +362,25 @@
 
     const sizesNode = $('[data-quick-sizes]', modal);
     sizesNode.innerHTML = product.sizes.map((size, index) =>
-      `<button type="button" class="${index === 0 ? 'is-active' : ''}" data-quick-size="${size}">${size}</button>`
+      `<button type="button" class="${index === 0 ? 'is-active' : ''}" data-quick-size="${size}" aria-pressed="${index === 0}" aria-label="Размер ${size}">${size}</button>`
     ).join('');
     $$('[data-quick-size]', sizesNode).forEach(button => {
       button.addEventListener('click', () => {
-        $$('[data-quick-size]', sizesNode).forEach(item => item.classList.remove('is-active'));
+        $$('[data-quick-size]', sizesNode).forEach(item => {
+          item.classList.remove('is-active');
+          item.setAttribute('aria-pressed', 'false');
+        });
         button.classList.add('is-active');
+        button.setAttribute('aria-pressed', 'true');
         state.quickSize = button.dataset.quickSize;
       });
     });
 
-    document.body.classList.remove('drawer-open', 'menu-open', 'search-open');
-    document.body.classList.add('modal-open');
-    modal.setAttribute('aria-hidden', 'false');
+    openOverlay(modal);
   }
 
   function closeQuickView() {
-    document.body.classList.remove('modal-open');
-    $('[data-quick-view]')?.setAttribute('aria-hidden', 'true');
+    closeOverlay($('[data-quick-view]'));
   }
 
   let toastTimer;
@@ -358,17 +407,20 @@
     if (!toggle || !menu) return;
 
     toggle.addEventListener('click', () => {
-      const open = !document.body.classList.contains('menu-open');
-      document.body.classList.toggle('menu-open', open);
-      document.body.classList.remove('drawer-open', 'modal-open', 'search-open');
-      toggle.setAttribute('aria-expanded', String(open));
-      menu.setAttribute('aria-hidden', String(!open));
+      if (activeOverlay === menu) closeOverlay(menu);
+      else openOverlay(menu);
     });
+    $('[data-menu-close]', menu)?.addEventListener('click', () => closeOverlay(menu));
 
     $$('a', menu).forEach(link => link.addEventListener('click', () => {
-      document.body.classList.remove('menu-open');
-      toggle.setAttribute('aria-expanded', 'false');
-      menu.setAttribute('aria-hidden', 'true');
+      closeOverlay(menu);
+      if (link.hash && link.pathname === location.pathname) {
+        const destination = document.getElementById(link.hash.slice(1));
+        if (destination) {
+          destination.setAttribute('tabindex', '-1');
+          destination.focus({ preventScroll: true });
+        }
+      }
     }));
   }
 
@@ -376,39 +428,26 @@
     const panel = $('[data-search-panel]');
     if (!panel) return;
     $$('.search-trigger').forEach(button => button.addEventListener('click', () => {
-      document.body.classList.remove('menu-open', 'drawer-open', 'modal-open');
-      document.body.classList.add('search-open');
-      panel.setAttribute('aria-hidden', 'false');
-      setTimeout(() => $('#site-search')?.focus(), 150);
+      openOverlay(panel);
     }));
     $('[data-search-close]')?.addEventListener('click', closeSearch);
   }
 
   function closeSearch() {
-    document.body.classList.remove('search-open');
-    $('[data-search-panel]')?.setAttribute('aria-hidden', 'true');
+    closeOverlay($('[data-search-panel]'));
   }
 
   function setupOverlays() {
     $$('.cart-trigger').forEach(button => button.addEventListener('click', openCart));
     $('.cart-close')?.addEventListener('click', closeCart);
     $('[data-drawer-overlay]')?.addEventListener('click', () => {
-      closeCart();
-      closeQuickView();
+      closeOverlay();
     });
     $('.quick-view__close')?.addEventListener('click', closeQuickView);
     $('.quick-add')?.addEventListener('click', () => {
       if (!state.quickProduct) return;
       addToCart(state.quickProduct.id, state.quickSize || state.quickProduct.sizes[0]);
-      closeQuickView();
-      setTimeout(openCart, 280);
-    });
-    document.addEventListener('keydown', event => {
-      if (event.key !== 'Escape') return;
-      closeCart();
-      closeQuickView();
-      closeSearch();
-      document.body.classList.remove('menu-open', 'filter-open');
+      openCart();
     });
   }
 
@@ -717,9 +756,31 @@
   function setupNewsletter() {
     $('[data-newsletter-form]')?.addEventListener('submit', event => {
       event.preventDefault();
-      const input = $('input', event.currentTarget);
-      showToast(`Готово — ${input.value} в списке`);
-      event.currentTarget.reset();
+      showToast('Форма подписки скоро заработает');
+    });
+  }
+
+  function syncCatalogFilters() {
+    $$('[data-filter-category]').forEach(control => {
+      const active = control.dataset.filterCategory === state.filters.category;
+      control.classList.toggle('is-active', active);
+      if (control.matches('button')) control.setAttribute('aria-pressed', String(active));
+      else if (active) control.setAttribute('aria-current', 'true');
+      else control.removeAttribute('aria-current');
+    });
+    $$('button[data-size], button[data-color]').forEach(button => {
+      const active = button.hasAttribute('data-size') ? state.filters.sizes.has(button.dataset.size) : state.filters.colors.has(button.dataset.color);
+      button.classList.toggle('is-active', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
+    const selectedCount = (state.filters.category === 'all' ? 0 : 1) + state.filters.sizes.size + state.filters.colors.size;
+    $$('[data-filter-open]').forEach(button => {
+      const badge = $('i', button);
+      if (badge) {
+        badge.textContent = selectedCount;
+        badge.setAttribute('aria-hidden', 'true');
+      }
+      button.setAttribute('aria-label', selectedCount ? `Фильтры, выбрано ${selectedCount}` : 'Фильтры');
     });
   }
 
@@ -731,37 +792,46 @@
     const query = params.get('q');
     if (category === 'hoodie' || category === 'tee') state.filters.category = category;
     if (query) state.filters.query = query;
-
-    const syncCategories = value => {
-      $$('[data-filter-category]').forEach(button => button.classList.toggle('is-active', button.dataset.filterCategory === value));
-    };
-    syncCategories(state.filters.category);
+    const searchInput = $('#site-search');
+    if (searchInput) searchInput.value = query || '';
+    if (params.has('q')) {
+      let robots = $('meta[name="robots"]');
+      if (!robots) {
+        robots = document.createElement('meta');
+        robots.name = 'robots';
+        document.head.append(robots);
+      }
+      robots.content = 'noindex, follow';
+    }
+    syncCatalogFilters();
 
     $$('[data-filter-category]').forEach(button => {
       button.addEventListener('click', () => {
         state.filters.category = button.dataset.filterCategory;
-        syncCategories(state.filters.category);
+        syncCatalogFilters();
         renderProducts();
-        if (innerWidth <= 700) document.body.classList.remove('filter-open');
+        if (filterViewport.matches) closeOverlay($('[data-filter-panel]'));
       });
     });
 
-    $$('[data-size]').forEach(button => {
+    $$('button[data-size]').forEach(button => {
       button.addEventListener('click', () => {
         const size = button.dataset.size;
         button.classList.toggle('is-active');
         if (button.classList.contains('is-active')) state.filters.sizes.add(size);
         else state.filters.sizes.delete(size);
+        syncCatalogFilters();
         renderProducts();
       });
     });
 
-    $$('[data-color]').forEach(button => {
+    $$('button[data-color]').forEach(button => {
       button.addEventListener('click', () => {
         const color = button.dataset.color;
         button.classList.toggle('is-active');
         if (button.classList.contains('is-active')) state.filters.colors.add(color);
         else state.filters.colors.delete(color);
+        syncCatalogFilters();
         renderProducts();
       });
     });
@@ -772,20 +842,26 @@
     });
 
     $$('[data-filter-reset]').forEach(button => button.addEventListener('click', resetFilters));
-    $('[data-filter-open]')?.addEventListener('click', () => document.body.classList.add('filter-open'));
-    $('[data-filter-close]')?.addEventListener('click', () => document.body.classList.remove('filter-open'));
+    $('[data-filter-open]')?.addEventListener('click', () => openOverlay($('[data-filter-panel]')));
+    $('[data-filter-close]')?.addEventListener('click', () => closeOverlay($('[data-filter-panel]')));
   }
 
   function resetFilters() {
+    const focusWasInEmptyState = document.activeElement?.closest('[data-catalog-empty]');
     state.filters.category = 'all';
     state.filters.sizes.clear();
     state.filters.colors.clear();
     state.filters.sort = 'new';
     state.filters.query = '';
-    $$('[data-filter-category]').forEach(button => button.classList.toggle('is-active', button.dataset.filterCategory === 'all'));
-    $$('[data-size], [data-color]').forEach(button => button.classList.remove('is-active'));
+    syncCatalogFilters();
     if ($('[data-sort]')) $('[data-sort]').value = 'new';
+    if ($('#site-search')) $('#site-search').value = '';
     renderProducts();
+    if (focusWasInEmptyState) {
+      const count = $('[data-results-count]');
+      count?.setAttribute('tabindex', '-1');
+      count?.focus({ preventScroll: true });
+    }
   }
 
   function setupCustomCursor() {
@@ -839,20 +915,20 @@
     const ready = () => {
       document.body.classList.add('is-ready', 'is-loaded');
       const preloader = document.querySelector('[data-preloader]');
-      window.setTimeout(() => preloader?.remove(), 750);
+      preloader?.remove();
     };
-    if (document.readyState === 'complete') setTimeout(ready, 250);
-    else window.addEventListener('load', () => setTimeout(ready, 350), { once: true });
-    setTimeout(ready, 1800);
+    requestAnimationFrame(ready);
   }
 
   setupPreloader();
+  setupOverlayAccessibility();
   setupHeader();
   setupMenu();
   setupSearch();
   setupOverlays();
   setupCatalogFilters();
   renderProducts();
+  bindProductCards(document);
   updateCartUI();
   observeReveals();
   setupHeroParallax();
