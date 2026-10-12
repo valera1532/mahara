@@ -1,0 +1,70 @@
+<?php
+// Copy to config.local.php, update absolute path and domain, keep out of Git.
+// Create the private directory next to the website directory, never inside it.
+return [
+    'data_dir' => '/var/www/USERNAME/data/mahara-private',
+    'origin' => 'https://example.ru',
+    'production' => true,
+    // Enable only if your reverse proxy OVERWRITES X-Forwarded-For and
+    // X-Forwarded-Proto and cannot be bypassed by direct public requests.
+    'trust_proxy' => false,
+    // CDEK delivery is paid separately by the recipient. These values are needed
+    // for an estimate at checkout; package dimensions are centimetres, weight grams.
+    // Account/password: private data_dir/cdek-secrets.php. No map API key required.
+    'shipping' => [
+        'enabled' => false,
+        'origin_city_code' => 0, // Actual CDEK city code of the sender.
+        'tariff_codes' => [], // Allowed office-delivery tariffs under this contract.
+        'packages_by_category' => [
+            // 'hoodie' => ['weight' => 0, 'width' => 0, 'height' => 0, 'length' => 0],
+            // 'tee' => ['weight' => 0, 'width' => 0, 'height' => 0, 'length' => 0],
+        ],
+    ],
+    // Enable payments only after configuring the connected cash-register service,
+    // delivery terms, legal documents and running the payment tests.
+    // Secrets belong in data_dir/tbank-secrets.php (outside the document root),
+    // or at the absolute path from the MAHARA_TBANK_SECRETS environment variable.
+    'payments' => [
+        'enabled' => false,
+        'receipt_enabled' => false,
+        'taxation' => '', // Ask the accountant: osn/usn_income/usn_income_outcome/patent/esn.
+        'item_tax' => '', // Actual item VAT code supported by the bank; do not guess.
+        'delivery_mode' => 'cdek_receiver', // Recipient pays CDEK separately; fixed also supported.
+        'delivery_amount' => 0, // Kopecks, only for fixed delivery.
+        'delivery_label' => '',
+        'terms_url' => '/terms.html', // Drafts do NOT enable checkout.
+        'privacy_url' => '/privacy.html',
+        'payment_ttl' => 900,
+    ],
+    // Fill real seller data and approve the text at /terms.html etc. before
+    // published=true. Code-derived privacy purposes/categories/security already
+    // have defaults; confirm they match the actual hosting and business process.
+    'merchant' => [
+        'published' => false,
+        'legalVersion' => '', // e.g. approved document date/revision.
+        'identity' => [
+            'legalName' => '', 'legalForm' => 'ИП', 'registrationNumber' => '',
+            'taxId' => '', 'address' => '', 'email' => '', 'phone' => '',
+        ],
+        'commerce' => [
+            'deliveryTerms' => '', // Regions, PVZ/courier, dispatch timing, estimate/actual price.
+            'paymentTerms' => '', // Full prepayment for clothing via SBP; who pays delivery.
+            'returnsAddress' => '', 'claimsChannel' => '',
+        ],
+        'privacy' => [
+            // operatorAddress/contact default to seller address/email/phone.
+            'processors' => '', // Actual bank/cash register/OFD, CDEK, hosting, email provider.
+            'retention' => '', 'deletionProcedure' => '',
+            'databaseLocation' => '', // Countries of primary DB AND backups.
+            'crossBorderTransfers' => '',
+        ],
+    ],
+    // Transactional mail and order-access recovery. Requires a cron worker and
+    // an authenticated mailbox. Never sends marketing or automatically enables.
+    // data_dir/mail-secrets.php -> ['username'=>'...', 'password'=>'...'].
+    'mail' => [
+        'enabled' => false,
+        'host' => '', 'port' => 465, 'encryption' => 'tls', // or 587/starttls; TLS always verified.
+        'from' => '', 'from_name' => 'MAHARA', 'shop_email' => '',
+    ],
+];

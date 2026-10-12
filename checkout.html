@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#050505" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="referrer" content="same-origin" />
+  <title>Оформление заказа — MAHARA</title>
+  <link rel="icon" href="/assets/icons/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/styles.css?v=20261011-2" />
+  <link rel="stylesheet" href="/checkout.css?v=20261011-2" />
+  <script defer src="/checkout.js?v=20261011-2"></script>
+</head>
+<body class="page-checkout">
+  <a class="skip-link" href="#main-content">Перейти к оформлению</a>
+  <header class="checkout-header">
+    <div class="checkout-container checkout-header__inner">
+      <a class="brand" href="/" aria-label="MAHARA — главная">
+        <svg class="brand__icon" viewBox="0 0 64 64" aria-hidden="true"><path d="M14 50V32l8-8 5 5V17l5-7 5 7v12l5-5 8 8v18M8 50h48M22 50V35M32 50V21M42 50V35" /></svg>
+        <span>MAHARA</span>
+      </a>
+      <a class="checkout-back" href="/catalog.html"><span aria-hidden="true">←</span> В каталог</a>
+    </div>
+  </header>
+
+  <main class="checkout-container checkout-main" id="main-content" tabindex="-1">
+    <div class="checkout-intro">
+      <p class="eyebrow">MAHARA / Заказ</p>
+      <h1>Ваш новый <em>образ</em></h1>
+      <p>Доставка СДЭК. Оплата через СБП.</p>
+    </div>
+
+    <noscript><p class="checkout-notice">Для оформления заказа включите JavaScript в настройках браузера.</p></noscript>
+    <div class="checkout-loading" data-loading role="status">Получаем ваш заказ…</div>
+    <div class="checkout-error" data-error role="alert" hidden></div>
+    <button class="checkout-button checkout-button--secondary" type="button" data-retry hidden>Попробовать снова</button>
+
+    <section class="checkout-empty" data-empty aria-labelledby="empty-title" hidden>
+      <span class="checkout-empty__symbol" aria-hidden="true">↗</span>
+      <h2 id="empty-title">Выберите свою вещь</h2>
+      <p>В корзине пока нет товаров.</p>
+      <a class="checkout-button" href="/catalog.html">Перейти в каталог <span aria-hidden="true">→</span></a>
+    </section>
+
+    <div class="checkout-layout" data-checkout hidden>
+      <form class="checkout-form" data-checkout-form>
+        <fieldset class="checkout-section">
+          <legend><span>01</span> Контакты</legend>
+          <p class="checkout-section__note">Оформление без регистрации. Электронная почта нужна для чека.</p>
+          <div class="checkout-fields">
+            <label class="checkout-field checkout-field--wide" for="customer-name">Имя и фамилия
+              <input id="customer-name" name="name" autocomplete="name" maxlength="120" required placeholder="Как к вам обращаться" />
+            </label>
+            <label class="checkout-field" for="customer-phone">Телефон
+              <input id="customer-phone" name="phone" type="tel" autocomplete="tel" inputmode="tel" maxlength="24" required placeholder="+7 999 123-45-67" aria-describedby="phone-help" />
+              <small id="phone-help">Для связи по заказу и доставки</small>
+            </label>
+            <label class="checkout-field" for="customer-email">Электронная почта
+              <input id="customer-email" name="email" type="email" autocomplete="email" maxlength="64" required placeholder="you@example.ru" />
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset class="checkout-section">
+          <legend><span>02</span> Доставка СДЭК</legend>
+          <p class="checkout-section__note" data-delivery-note>Укажите удобный пункт выдачи СДЭК.</p>
+          <div class="checkout-fields">
+            <div class="checkout-field checkout-field--wide checkout-city" data-city-field>
+              <label for="delivery-city">Город или населённый пункт</label>
+              <input id="delivery-city" name="city" autocomplete="off" maxlength="100" required placeholder="Начните вводить название" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="shipping-city-list" aria-describedby="city-help shipping-status" />
+              <div class="checkout-city-suggestions" id="shipping-city-list" role="listbox" aria-label="Населённые пункты доставки" tabindex="-1" data-city-suggestions hidden></div>
+              <small id="city-help">Введите название города, посёлка или станицы и выберите подсказку.</small>
+            </div>
+            <div class="checkout-shipping-picker checkout-field--wide" data-shipping-picker hidden>
+              <div class="checkout-field checkout-point" data-point-options hidden>
+                <span id="shipping-point-label">Пункт выдачи СДЭК</span>
+                <input id="shipping-point" type="hidden" disabled />
+                <button class="checkout-point-trigger" type="button" data-point-trigger aria-labelledby="shipping-point-label shipping-point-value" aria-haspopup="dialog" aria-expanded="false" aria-controls="shipping-point-panel" disabled>
+                  <span class="checkout-point-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M19 10c0 5-7 10-7 10S5 15 5 10a7 7 0 1 1 14 0Z"/><circle cx="12" cy="10" r="2.5"/></svg></span>
+                  <span class="checkout-point-copy"><span id="shipping-point-value" data-point-value>Выберите пункт выдачи</span><small data-point-detail>Найдите удобный адрес</small></span>
+                  <svg class="checkout-point-chevron" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m5 7.5 5 5 5-5"/></svg>
+                </button>
+                <div class="checkout-point-panel" id="shipping-point-panel" role="dialog" aria-label="Выбор пункта выдачи СДЭК" data-point-panel hidden>
+                  <div class="checkout-point-search">
+                    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg>
+                    <label class="sr-only" for="shipping-point-search">Поиск пункта по адресу или коду</label>
+                    <input id="shipping-point-search" type="search" autocomplete="off" maxlength="200" placeholder="Улица, адрес или код пункта" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="shipping-point-list" aria-describedby="shipping-point-count" />
+                  </div>
+                  <p class="checkout-point-count" id="shipping-point-count" data-point-count role="status" aria-live="polite"></p>
+                  <div class="checkout-point-list" id="shipping-point-list" role="listbox" aria-label="Пункты выдачи" tabindex="-1" data-point-list></div>
+                  <p class="checkout-point-empty" data-point-empty hidden>Пункт не найден. Попробуйте другую улицу или код.</p>
+                </div>
+              </div>
+              <p class="checkout-shipping-address" data-shipping-address hidden></p>
+              <button class="checkout-button checkout-button--secondary" type="button" data-calculate-shipping hidden>Рассчитать доставку</button>
+            </div>
+            <label class="checkout-field checkout-field--wide" for="delivery-point" data-manual-point>Код пункта выдачи СДЭК
+              <input id="delivery-point" name="point" maxlength="30" required placeholder="Например, MSK1" aria-describedby="point-help" />
+              <small id="point-help">Код указан в карточке пункта на <a href="https://www.cdek.ru/ru/offices/" target="_blank" rel="noopener noreferrer">карте СДЭК <span aria-hidden="true">↗</span></a></small>
+            </label>
+            <label class="checkout-field checkout-field--wide" for="delivery-address" data-manual-address>Адрес пункта выдачи
+              <input id="delivery-address" name="address" autocomplete="street-address" maxlength="300" required placeholder="Улица, дом" />
+            </label>
+          </div>
+          <p class="checkout-shipping-status" id="shipping-status" data-shipping-status role="status" aria-live="polite" aria-atomic="true" hidden></p>
+        </fieldset>
+
+        <fieldset class="checkout-section checkout-section--payment">
+          <legend><span>03</span> Оплата</legend>
+          <div class="checkout-payment-method"><span class="checkout-sbp" aria-hidden="true">↗</span><div><strong>Система быстрых платежей</strong><p>В приложении вашего банка или по QR-коду.</p></div><span class="checkout-method-check" aria-hidden="true">✓</span></div>
+          <p class="checkout-notice" data-availability hidden></p>
+          <label class="checkout-consent" for="accepted-terms">
+            <input id="accepted-terms" name="acceptedTerms" type="checkbox" required disabled />
+            <span data-consent-copy>Условия оформления заказа временно недоступны.</span>
+          </label>
+          <p class="checkout-payment-note" data-privacy-copy>Данные используются для оформления и исполнения заказа. <a href="/privacy.html" target="_blank" rel="noopener noreferrer">Политика обработки персональных данных</a>.</p>
+          <button class="checkout-button checkout-pay" type="submit" data-submit disabled><span data-submit-label>Оплатить через СБП</span><span aria-hidden="true">→</span></button>
+          <p class="checkout-payment-note">После создания заказа откроется оплата через СБП.</p>
+        </fieldset>
+      </form>
+
+      <aside class="checkout-summary" aria-labelledby="summary-title">
+        <div class="checkout-summary__heading"><h2 id="summary-title">Ваш заказ</h2><a href="/catalog.html">Изменить <span aria-hidden="true">↗</span></a></div>
+        <ul class="checkout-items" data-items></ul>
+        <dl class="checkout-totals">
+          <div><dt>Товары</dt><dd data-subtotal>—</dd></div>
+          <div><dt data-delivery-label>Доставка</dt><dd data-delivery-amount>—</dd></div>
+          <div class="checkout-totals__total"><dt data-total-label>Итого к оплате</dt><dd data-total>—</dd></div>
+        </dl>
+        <p class="checkout-shipping-period" data-shipping-period hidden></p>
+        <p class="checkout-summary__note" data-shipping-disclaimer hidden>Предварительный расчёт. СДЭК уточнит итоговую стоимость при приёмке отправления.</p>
+        <p class="checkout-summary__note" data-summary-note>Стоимость и наличие проверяются перед оплатой.</p>
+      </aside>
+    </div>
+
+    <section class="checkout-order" data-order hidden aria-labelledby="order-title">
+      <div class="checkout-order__symbol" data-order-symbol aria-hidden="true">↗</div>
+      <p class="eyebrow" data-order-number>Ваш заказ</p>
+      <h2 id="order-title" data-order-title>Заказ создан</h2>
+      <p class="checkout-order__status" data-order-status role="status" aria-live="polite" aria-atomic="true"></p>
+      <strong class="checkout-order__amount" data-order-amount></strong>
+      <div class="checkout-qr" data-qr-wrap hidden><img data-qr alt="QR-код для оплаты заказа через СБП" width="240" height="240" /><p>Откройте приложение банка и отсканируйте QR-код.</p></div>
+      <a class="checkout-button" data-payment-link hidden>Оплатить в приложении банка <span aria-hidden="true">↗</span></a>
+      <p class="checkout-order__expiry" data-expiry hidden></p>
+      <div class="checkout-order__actions"><button class="checkout-button checkout-button--secondary" type="button" data-check-status>Проверить оплату</button><a class="checkout-back" href="/catalog.html">Вернуться в каталог <span aria-hidden="true">→</span></a></div>
+      <p class="checkout-order__hint" data-order-hint>Подтверждение оплаты появится здесь автоматически.</p>
+    </section>
+    <details class="checkout-recovery" data-recovery hidden>
+      <summary>Найти оформленный заказ</summary>
+      <p>Укажите номер заказа и почту, которую использовали при оформлении. Пришлём одноразовую ссылку для доступа.</p>
+      <form data-recovery-form>
+        <div class="checkout-fields">
+          <label class="checkout-field" for="recovery-number">Номер заказа<input id="recovery-number" name="number" maxlength="100" required autocomplete="off" placeholder="MH-…" /></label>
+          <label class="checkout-field" for="recovery-email">Электронная почта<input id="recovery-email" name="email" type="email" maxlength="254" required autocomplete="email" placeholder="you@example.ru" /></label>
+        </div>
+        <button class="checkout-button checkout-button--secondary" type="submit">Получить ссылку на заказ</button>
+        <p data-recovery-message role="status" aria-live="polite"></p>
+      </form>
+    </details>
+  </main>
+  <footer class="checkout-container checkout-footer"><span>© 2026 MAHARA</span><nav aria-label="Информация магазина"><a href="/delivery.html">Доставка и оплата</a><a href="/returns.html">Возврат</a><a href="/terms.html">Условия заказа</a><a href="/privacy.html">Персональные данные</a><a href="/contacts.html">Контакты</a></nav></footer>
+</body>
+</html>

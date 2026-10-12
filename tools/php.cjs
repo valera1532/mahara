@@ -1,0 +1,10 @@
+'use strict';
+const fs = require('node:fs');
+const path = require('node:path');
+const {spawn} = require('node:child_process');
+const root = path.resolve(__dirname, '..');
+const portable = path.join(root, '.runtime', 'php', process.platform === 'win32' ? 'php.exe' : 'php');
+const binary = process.env.PHP_BINARY || (fs.existsSync(portable) ? portable : 'php');
+const child = spawn(binary, process.argv.slice(2), {cwd:root,stdio:'inherit',env:{APP_ENV:'development',...process.env}});
+child.on('error', error => { console.error(`PHP не запущен: ${error.message}. Установите PHP 8.2+ или задайте PHP_BINARY.`); process.exitCode=1; });
+child.on('exit', code => {process.exitCode=code ?? 1;});

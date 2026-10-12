@@ -24,11 +24,11 @@
   <meta name="twitter:image" content="https://maharussia.ru/assets/images/social-cover.jpg" />
   <meta name="twitter:image:alt" content="MAHARA — российский бренд одежды | Худи и футболки" />
   <link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=20261002-2" />
+  <link rel="stylesheet" href="styles.css?v=20261011-2" />
   <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://maharussia.ru/#organization","name":"MAHARA","url":"https://maharussia.ru/","logo":"https://maharussia.ru/assets/images/mahara-emblem.webp"},{"@type":"WebSite","@id":"https://maharussia.ru/#website","name":"MAHARA","url":"https://maharussia.ru/","inLanguage":"ru-RU","publisher":{"@id":"https://maharussia.ru/#organization"}},{"@type":"WebPage","@id":"https://maharussia.ru/#page","url":"https://maharussia.ru/","name":"MAHARA — российский бренд одежды","inLanguage":"ru-RU","isPartOf":{"@id":"https://maharussia.ru/#website"},"about":{"@id":"https://maharussia.ru/#organization"}}]}</script>
-  <script defer src="catalog-data.js?v=20261002-2"></script>
-  <script defer src="cms-data.js?v=20261002-2"></script>
-  <script defer src="script.js?v=20261002-2"></script>
+  <script defer src="catalog-data.js?v=20261011-2"></script>
+  <script defer src="cms-data.js?v=20261011-2"></script>
+  <script defer src="script.js?v=20261011-2"></script>
 </head>
 <body class="page-home">
   <a class="skip-link" href="#main-content">Перейти к содержимому</a>
@@ -50,16 +50,9 @@
       <a href="#tshirts">Футболки</a>
       <a href="#lookbook">Lookbook</a>
       <a href="#story">О бренде</a>
-      <a class="nav-cms" href="admin.html">Управление</a>
     </nav>
 
     <div class="header-actions js-only">
-      <button class="icon-button search-trigger" type="button" aria-label="Поиск" aria-haspopup="dialog" aria-controls="search-dialog" aria-expanded="false">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
-      </button>
-      <button class="icon-button desktop-only" type="button" aria-label="Личный кабинет" disabled title="Скоро появится">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 21c.6-4.2 3.1-6.4 7-6.4s6.4 2.2 7 6.4"/></svg>
-      </button>
       <button class="icon-button cart-trigger" type="button" aria-label="Корзина" aria-haspopup="dialog" aria-controls="cart-dialog" aria-expanded="false">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1 13H6L5 8Z"/><path d="M9 9V6a3 3 0 0 1 6 0v3"/></svg>
         <span class="cart-count" data-cart-count>0</span>
@@ -79,11 +72,10 @@
       <a href="#tshirts"><span>03</span>Футболки</a>
       <a href="#lookbook"><span>04</span>Lookbook</a>
       <a href="#story"><span>05</span>О бренде</a>
-      <a href="admin.html"><span>06</span>Управление</a>
     </nav>
     <div class="mobile-menu__meta">
       <span>Made in Russia</span>
-      <a href="mailto:hello@mahara.ru">hello@mahara.ru</a>
+      <a href="contacts.html">Контакты магазина</a>
     </div>
   </aside>
 
@@ -131,7 +123,7 @@
         <div class="hero__meta hero-reveal">
           <div><strong>01</strong><span>Создано<br>в России</span></div>
           <div><strong>02</strong><span>Лимитированные<br>дропы</span></div>
-          <div><strong>03</strong><span>Доставка<br>по миру</span></div>
+          <div><strong>03</strong><span>Доставка<br>по России</span></div>
         </div>
       </div>
 
@@ -328,12 +320,11 @@
       <div class="container newsletter__inner reveal">
         <p class="eyebrow">Первым увидеть новый дроп</p>
         <h2>Никакого спама<br><em>Только вещи по делу</em></h2>
-        <form class="newsletter-form js-only" data-newsletter-form>
-          <label class="sr-only" for="email">Электронная почта</label>
-          <input id="email" name="email" type="email" placeholder="Ваш e-mail" autocomplete="email" required aria-describedby="newsletter-note" />
-          <button type="submit"><span>Подписаться</span><i aria-hidden="true">→</i></button>
-        </form>
-        <p class="newsletter__note" id="newsletter-note">Подписка скоро появится</p>
+        <div class="newsletter-social" data-newsletter-social>
+          <a href="https://t.me/ryabina_krasnaya" target="_blank" rel="noopener noreferrer">Telegram ↗</a>
+          <a href="https://vk.ru/clubmahara" target="_blank" rel="noopener noreferrer">VK ↗</a>
+        </div>
+        <p class="newsletter__note">Новости коллекций — в наших социальных сетях.</p>
       </div>
     </section>
   </main>
@@ -343,8 +334,8 @@
       <a class="footer-brand" href="#top">MAHARA <small>MADE IN RUSSIA</small></a>
       <nav class="footer-links" aria-label="Навигация в подвале">
         <div><span>Shop</span><a href="catalog.html">Каталог</a><a href="catalog.html?category=hoodie">Худи</a><a href="catalog.html?category=tee">Футболки</a></div>
-        <div><span>Info</span><a href="#story">О бренде</a><span class="footer-placeholder">Доставка и оплата</span><span class="footer-placeholder">Обмен и возврат</span></div>
-        <div><span>Social</span><span class="footer-placeholder">Telegram</span><span class="footer-placeholder">VK</span><span class="footer-placeholder">Instagram*</span></div>
+        <div><span>Info</span><a href="#story">О бренде</a><a href="delivery.html">Доставка и оплата</a><a href="returns.html">Обмен и возврат</a><a href="terms.html">Условия заказа</a><a href="privacy.html">Персональные данные</a><a href="contacts.html">Контакты и реквизиты</a></div>
+        <div><span>Social</span><a href="https://t.me/ryabina_krasnaya" target="_blank" rel="noopener noreferrer">Telegram ↗</a><a href="https://vk.ru/clubmahara" target="_blank" rel="noopener noreferrer">VK ↗</a></div>
       </nav>
     </div>
     <div class="container site-footer__bottom"><span>© 2026 MAHARA</span><span>Сделано в России</span></div>
@@ -365,7 +356,7 @@
     <div class="cart-empty" data-cart-empty><span>Корзина пока пуста</span><p>Добавьте вещь из нового дропа</p><a href="catalog.html">Открыть каталог →</a></div>
     <div class="cart-drawer__footer" data-cart-footer>
       <div><span>Итого</span><strong data-cart-total>0 ₽</strong></div>
-      <button type="button" disabled title="Оформление заказа скоро появится">Перейти к оформлению <i aria-hidden="true">→</i></button>
+      <button type="button" data-checkout>Перейти к оформлению <i aria-hidden="true">→</i></button>
       <small>Доставка рассчитывается при оформлении</small>
     </div>
   </aside>

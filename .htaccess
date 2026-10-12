@@ -1,0 +1,24 @@
+Options -Indexes
+DirectoryIndex index.php
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # Private source, configuration, credentials and development files.
+  RewriteRule (^|/)\. - [F,END]
+  RewriteRule ^(?:server|tools|data|tests|preview|node_modules)(?:/|$) - [F,END,NC]
+  RewriteRule \.(?:sqlite(?:-wal|-shm)?|db|log|ini|bak|zip|md|bat|sh|cjs)$ - [F,END,NC]
+  RewriteRule ^(?:site-defaults|seo\.config|package(?:-lock)?)\.json$ - [F,END,NC]
+
+  # Only public assets bypass the front controller. HTML is rendered by PHP.
+  RewriteRule ^(?:styles|legal|admin|inventory|management|checkout|orders)\.css$ - [END]
+  RewriteRule ^(?:script|catalog-data|cms-data|admin|admin-login|inventory|checkout|orders)\.js$ - [END]
+  RewriteRule ^assets/(?:images|icons)/[a-zA-Z0-9_.-]+\.(?:webp|png|jpe?g|svg|ico)$ - [END,NC]
+  RewriteRule ^index\.php$ - [END]
+  RewriteRule ^ index.php [END,QSA]
+</IfModule>
+
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>

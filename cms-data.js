@@ -1,9 +1,15 @@
-/* Shared browser-only content for the MAHARA demo editor. */
+/* Shared content client for the MAHARA server and editor. */
 (function () {
   'use strict';
 
   const clone = value => JSON.parse(JSON.stringify(value));
-  const baseProducts = clone(window.MaharaCatalog.products);
+  const productFactLabels = {
+    composition: 'Состав', care: 'Уход', manufacturer: 'Изготовитель и страна производства', measurements: 'Замеры и посадка'
+  };
+  const productFacts = Object.keys(productFactLabels);
+  const baseProducts = clone(window.MaharaCatalog.products).map(product => ({
+    ...product, ...Object.fromEntries(productFacts.map(key => [key, typeof product[key] === 'string' ? product[key].trim().slice(0, 2000) : '']))
+  }));
   const defaults = {
     version: 1,
     sections: {
@@ -34,9 +40,9 @@
         secondaryImage: 'assets/images/green-tee-close.webp'
       },
       newsletter: {
-        eyebrow: 'Первым увидеть новый дроп',
-        title: 'Никакого спама',
-        accent: 'Только вещи по делу'
+        eyebrow: 'Новые коллекции',
+        title: 'Следите за дропами',
+        accent: 'В наших социальных сетях'
       }
     },
     products: baseProducts
@@ -57,21 +63,21 @@
       field('lead', 'Вступление', 'textarea'), field('description', 'История', 'textarea'),
       field('image', 'Основная фотография', 'image'), field('secondaryImage', 'Вторая фотография', 'image')
     ] },
-    { id: 'newsletter', title: 'Подписка', description: 'Тексты блока подписки на новый дроп.', fields: [
+    { id: 'newsletter', title: 'Новости бренда', description: 'Тексты блока со ссылками на социальные сети. Email здесь не собирается.', fields: [
       field('eyebrow', 'Подпись'), field('title', 'Заголовок'), field('accent', 'Акцентная строка')
     ] }
   ];
 
   function imageSource(value, fallback) {
     if (typeof value !== 'string') return fallback;
-    if (/^assets\/images\/[\w.-]+\.(?:webp|png|jpe?g)$/i.test(value)) return value;
-    if (value.length < 16000000 && /^data:image\/(?:jpeg|png|webp);base64,[a-z\d+/=]+$/i.test(value)) return value;
+    if (/^assets\/(?:images|uploads)\/[\w.-]+\.(?:webp|png|jpe?g)$/i.test(value)) return value;
     return fallback;
   }
 
   function normalize(input) {
     const result = clone(defaults);
     if (!input || input.version !== 1) return result;
+    result.revision = Number.isInteger(input.revision) ? input.revision : 0;
     for (const definition of sectionDefinitions) {
       const source = input.sections?.[definition.id];
       if (!source || typeof source !== 'object') continue;
@@ -81,12 +87,19 @@
         else if (typeof source[key] === 'string') result.sections[definition.id][key] = source[key].trim().slice(0, type === 'textarea' ? 5000 : 200);
       }
     }
-    for (const product of result.products) {
-      const source = Array.isArray(input.products) && input.products.find(item => item?.id === product.id);
-      if (!source) continue;
+    if (Array.isArray(input.products)) result.products = input.products.filter(source =>
+      source && /^[a-z0-9][a-z0-9-]{0,79}$/.test(source.id) && ['hoodie', 'tee'].includes(source.category)
+    ).map(source => {
+      const product = clone(baseProducts.find(item => item.id === source.id) || baseProducts[0]);
+      product.id = source.id;
+      product.url = `product-${source.id}.html`;
+      product.category = source.category;
+      if (['black', 'green', 'burgundy', 'slate', 'white'].includes(source.color)) product.color = source.color;
+      for (const key of ['width', 'height']) if (Number.isInteger(source[key]) && source[key] > 0 && source[key] <= 12000) product[key] = source[key];
       for (const key of ['title', 'subtitle', 'description', 'label']) {
         if (typeof source[key] === 'string') product[key] = source[key].trim().slice(0, key === 'description' ? 5000 : 200);
       }
+      for (const key of productFacts) product[key] = typeof source[key] === 'string' ? source[key].trim().slice(0, 2000) : '';
       const price = Number(source.price);
       if (Number.isFinite(price) && price >= 0 && price <= 10000000) product.price = Math.round(price);
       for (const key of ['image', 'altImage']) product[key] = imageSource(source[key], product[key]);
@@ -94,67 +107,53 @@
         const sizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL'].filter(size => source.sizes.includes(size));
         if (sizes.length) product.sizes = sizes;
       }
-    }
+      return product;
+    });
     return result;
   }
 
-  let database;
-  function openDatabase() {
-    if (!database) database = new Promise((resolve, reject) => {
-      const request = indexedDB.open('mahara-demo-cms', 1);
-      request.onupgradeneeded = () => request.result.createObjectStore('content');
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-      request.onblocked = () => reject(new Error('Закройте другие вкладки демо и попробуйте снова.'));
-    });
-    return database;
+  let csrfToken;
+  async function request(url, options = {}) {
+    const response = await fetch(url, { credentials: 'same-origin', cache: 'no-store', ...options });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(data.error || data.message || (response.status === 401 ? 'Войдите в админку ещё раз.' : 'Сервер не сохранил изменения. Попробуйте ещё раз.'));
+      error.status = response.status;
+      if (response.status === 401) csrfToken = null;
+      throw error;
+    }
+    return data;
   }
 
-  async function readRecord() {
-    const db = await openDatabase();
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction('content', 'readonly');
-      const request = transaction.objectStore('content').get('site');
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-      transaction.onabort = () => reject(transaction.error);
-    });
+  async function load(options = {}) {
+    const embedded = options.preferEmbedded && document.getElementById('mahara-content');
+    if (embedded) {
+      try { return normalize(JSON.parse(embedded.textContent)); } catch { /* Fall through to the API. */ }
+    }
+    return normalize(await request('/api/content'));
   }
 
-  async function writeRecord(value, remove = false) {
-    const db = await openDatabase();
-    await new Promise((resolve, reject) => {
-      const transaction = db.transaction('content', 'readwrite');
-      const store = transaction.objectStore('content');
-      if (remove) store.delete('site');
-      else store.put(value, 'site');
-      transaction.oncomplete = resolve;
-      transaction.onerror = () => reject(transaction.error);
-      transaction.onabort = () => reject(transaction.error);
-    });
+  async function authorization() {
+    if (!csrfToken) csrfToken = (await request('/api/admin/session')).csrfToken;
+    return { 'X-CSRF-Token': csrfToken };
   }
 
-  async function load() {
-    return normalize(await readRecord());
-  }
-
-  const channel = typeof BroadcastChannel === 'function' ? new BroadcastChannel('mahara-demo-content') : null;
+  const channel = typeof BroadcastChannel === 'function' ? new BroadcastChannel('mahara-content') : null;
   if (channel) channel.onmessage = () => window.dispatchEvent(new Event('mahara:content-updated'));
 
   async function save(content) {
-    const value = normalize(content);
-    await writeRecord(value);
+    const value = normalize(await request('/api/admin/content', {
+      method: 'PUT', headers: { ...await authorization(), 'Content-Type': 'application/json' }, body: JSON.stringify(content)
+    }));
     window.dispatchEvent(new CustomEvent('mahara:content-saved', { detail: value }));
     channel?.postMessage('saved');
     return clone(value);
   }
 
-  async function reset() {
-    await writeRecord(null, true);
-    const value = clone(defaults);
-    window.dispatchEvent(new CustomEvent('mahara:content-saved', { detail: value }));
-    channel?.postMessage('reset');
-    return value;
+  async function upload(file) {
+    return request('/api/admin/uploads', {
+      method: 'POST', headers: { ...await authorization(), 'Content-Type': file.type }, body: file
+    });
   }
 
   function text(selector, value, multiline = false) {
@@ -219,6 +218,20 @@
       text('.product-detail__price', `${new Intl.NumberFormat('ru-RU').format(product.price)} ₽`);
       text('.product-detail__facts > div:nth-child(2) dd', product.sizes.join(', '));
       text('.product-detail__facts > div:nth-child(3) dd', product.subtitle);
+      const facts = detail.querySelector('.product-detail__facts');
+      if (facts) for (const key of productFacts) {
+        let fact = facts.querySelector(`[data-product-fact="${key}"]`);
+        if (!product[key]) { fact?.remove(); continue; }
+        if (!fact) {
+          fact = document.createElement('div');
+          fact.dataset.productFact = key;
+          fact.append(document.createElement('dt'), document.createElement('dd'));
+          facts.append(fact);
+        }
+        fact.querySelector('dt').textContent = productFactLabels[key];
+        fact.querySelector('dd').textContent = product[key];
+        fact.querySelector('dd').style.whiteSpace = 'pre-line';
+      }
       const gallery = detail.querySelector('.product-detail__gallery');
       if (gallery) {
         const photos = product.image === product.altImage ? [product.image] : [product.image, product.altImage];
@@ -255,5 +268,5 @@
     return value;
   }
 
-  window.MaharaCMS = { getDefaults: () => clone(defaults), sectionDefinitions, load, save, reset, apply };
+  window.MaharaCMS = { getDefaults: () => clone(defaults), sectionDefinitions, load, save, upload, apply };
 })();

@@ -1,0 +1,25 @@
+{
+  "name": "mahara-store",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MAHARA storefront (PHP 8.2+ backend)",
+  "engines": { "node": ">=24.0.0" },
+  "scripts": {
+    "start": "node tools/php.cjs -S 127.0.0.1:8000 server/router.php",
+    "test": "node --test server/backend.test.cjs tests/cms-client.test.cjs",
+    "test:cms": "node tools/audit-cms.cjs",
+    "test:inventory": "node tests/inventory-browser.cjs",
+    "test:payments": "node tools/php.cjs tests/payments.php",
+    "test:shipping": "node tools/php.cjs tests/shipping.php",
+    "test:commerce": "node tools/php.cjs tests/commerce.php",
+    "test:checkout": "node tests/checkout-browser.cjs",
+    "test:orders": "node tests/orders-browser.cjs",
+    "test:cart": "node tests/cart-browser.cjs",
+    "test:notifications": "node tools/php.cjs tests/notifications.php",
+    "test:launch": "node tools/php.cjs tests/launch-readiness.php",
+    "test:legal": "node tools/php.cjs tests/launch.php",
+    "test:seo": "node tools/audit-seo.cjs",
+    "release": "node tools/package-release.cjs",
+    "admin:create": "node tools/php.cjs tools/admin.php create"
+  }
+}

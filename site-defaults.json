@@ -1,0 +1,210 @@
+{
+  "version": 1,
+  "sections": {
+    "hero": {
+      "eyebrow": "Уличная культура · Российский дух",
+      "title": "MAHARA",
+      "subtitle": "MADE IN RUSSIA",
+      "description": "Премиальная одежда с авторской вышивкой и арт‑принтами\nМалые тиражи для тех, кто не хочет выглядеть как все",
+      "button": "Смотреть дроп",
+      "image": "assets/images/hero-man.webp",
+      "secondaryImage": "assets/images/hero-woman.webp"
+    },
+    "campaign": {
+      "eyebrow": "Campaign 001",
+      "title": "Не просто одежда",
+      "accent": "Часть разговора",
+      "description": "Коллекция соединяет архитектуру, культурные символы и современный уличный силуэт\nВ каждой вещи — детали, которые считываются постепенно",
+      "button": "Открыть lookbook",
+      "image": "assets/images/green-tee-seated.webp"
+    },
+    "story": {
+      "eyebrow": "О бренде",
+      "title": "Локальный бренд",
+      "accent": "без провинциальности",
+      "lead": "MAHARA создаёт одежду в России и говорит с миром на современном визуальном языке",
+      "description": "Мы не пытаемся выпускать всё для всех\nВместо этого делаем небольшие коллекции, следим за посадкой, тканью и тем, как каждая деталь проживёт вместе с владельцем",
+      "image": "assets/images/black-last-supper.webp",
+      "secondaryImage": "assets/images/green-tee-close.webp"
+    },
+    "newsletter": {
+      "eyebrow": "Первым увидеть новый дроп",
+      "title": "Никакого спама",
+      "accent": "Только вещи по делу"
+    }
+  },
+  "products": [
+    {
+      "id": "hoodie-black",
+      "title": "Худи MAHARA Black",
+      "subtitle": "Embroidery / Oversize",
+      "category": "hoodie",
+      "color": "black",
+      "price": 16900,
+      "image": "assets/images/black-hoodie.webp",
+      "altImage": "assets/images/black-hoodie-woman.webp",
+      "label": "New drop",
+      "sizes": [
+        "S",
+        "M",
+        "L",
+        "XL",
+        "XXL"
+      ],
+      "description": "Чёрное худи свободного кроя из плотного хлопка; авторская вышивка с архитектурными символами, мягкая изнанка и глубокий капюшон",
+      "url": "product-hoodie-black.html",
+      "width": 853,
+      "height": 1280
+    },
+    {
+      "id": "hoodie-green",
+      "title": "Худи MAHARA Green",
+      "subtitle": "Embroidery / Oversize",
+      "category": "hoodie",
+      "color": "green",
+      "price": 16900,
+      "image": "assets/images/green-hoodie.webp",
+      "altImage": "assets/images/green-hoodie-back.webp",
+      "label": "New drop",
+      "sizes": [
+        "S",
+        "M",
+        "L",
+        "XL",
+        "XXL"
+      ],
+      "description": "Тёмно-зелёное худи с вышивкой по всей поверхности; плотная ткань держит форму, а объёмный силуэт подходит для многослойных образов",
+      "url": "product-hoodie-green.html",
+      "width": 853,
+      "height": 1280
+    },
+    {
+      "id": "tee-slate",
+      "title": "Футболка MAHARA Slate",
+      "subtitle": "Embroidery / Heavy cotton",
+      "category": "tee",
+      "color": "slate",
+      "price": 7900,
+      "image": "assets/images/slate-tee.webp",
+      "altImage": "assets/images/slate-tee-back.webp",
+      "label": "New drop",
+      "sizes": [
+        "S",
+        "M",
+        "L",
+        "XL",
+        "XXL"
+      ],
+      "description": "Футболка из плотного хлопка со свободной посадкой и небольшой вышивкой с российскими архитектурными мотивами",
+      "url": "product-tee-slate.html",
+      "width": 853,
+      "height": 1280
+    },
+    {
+      "id": "tee-burgundy",
+      "title": "Футболка Last Supper Burgundy",
+      "subtitle": "Art print / Heavy cotton",
+      "category": "tee",
+      "color": "burgundy",
+      "price": 6900,
+      "image": "assets/images/burgundy-tee-angle.webp",
+      "altImage": "assets/images/burgundy-tee.webp",
+      "label": "Bestseller",
+      "sizes": [
+        "S",
+        "M",
+        "L",
+        "XL"
+      ],
+      "description": "Бордовая футболка с крупным арт-принтом; плотный хлопок, свободный силуэт и изображение, которое считывается как самостоятельное высказывание",
+      "url": "product-tee-burgundy.html",
+      "width": 853,
+      "height": 1280
+    },
+    {
+      "id": "tee-white",
+      "title": "Футболка Last Supper White",
+      "subtitle": "Art print / Heavy cotton",
+      "category": "tee",
+      "color": "white",
+      "price": 6900,
+      "image": "assets/images/white-last-supper.webp",
+      "altImage": "assets/images/white-last-supper.webp",
+      "label": "New drop",
+      "sizes": [
+        "S",
+        "M",
+        "L",
+        "XL"
+      ],
+      "description": "Белая футболка с контрастным арт-принтом, плотным воротом и свободной посадкой; базовый цвет делает графику главным акцентом",
+      "url": "product-tee-white.html",
+      "width": 853,
+      "height": 1280
+    },
+    {
+      "id": "tee-black",
+      "title": "Футболка Last Supper Black",
+      "subtitle": "Art print / Heavy cotton",
+      "category": "tee",
+      "color": "black",
+      "price": 6900,
+      "image": "assets/images/black-last-supper.webp",
+      "altImage": "assets/images/black-last-supper.webp",
+      "label": "Limited",
+      "sizes": [
+        "M",
+        "L",
+        "XL",
+        "XXL"
+      ],
+      "description": "Чёрная футболка из плотного хлопка с крупным принтом; лимитированная модель из текущего дропа",
+      "url": "product-tee-black.html",
+      "width": 853,
+      "height": 1280
+    },
+    {
+      "id": "tee-green",
+      "title": "Футболка Last Supper Green",
+      "subtitle": "Art print / Heavy cotton",
+      "category": "tee",
+      "color": "green",
+      "price": 6900,
+      "image": "assets/images/green-tee.webp",
+      "altImage": "assets/images/green-tee-seated.webp",
+      "label": "New color",
+      "sizes": [
+        "S",
+        "M",
+        "L",
+        "XL"
+      ],
+      "description": "Глубокий зелёный оттенок, свободная посадка и крупный арт-принт; футболка работает и как акцент, и как часть спокойного образа",
+      "url": "product-tee-green.html",
+      "width": 853,
+      "height": 1280
+    },
+    {
+      "id": "hoodie-black-female",
+      "title": "Худи MAHARA Black II",
+      "subtitle": "Unisex / Embroidery",
+      "category": "hoodie",
+      "color": "black",
+      "price": 16900,
+      "image": "assets/images/black-hoodie-woman.webp",
+      "altImage": "assets/images/black-hoodie.webp",
+      "label": "Unisex",
+      "sizes": [
+        "XS",
+        "S",
+        "M",
+        "L",
+        "XL"
+      ],
+      "description": "Унисекс-худи с расслабленной посадкой, объёмным капюшоном и вышивкой по всей поверхности; хорошо сидит на разном типе фигуры",
+      "url": "product-hoodie-black-female.html",
+      "width": 853,
+      "height": 1280
+    }
+  ]
+}
