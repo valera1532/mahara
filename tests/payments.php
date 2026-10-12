@@ -27,7 +27,7 @@ require_once dirname(__DIR__) . '/server/payments.php';
 // Payment tests exercise the shipping hook without invoking CDEK's network.
 function mahara_shipping_public_config(): array { return ['enabled' => true]; }
 function mahara_shipping_validate(array $delivery, array $items): array {
-    if (($delivery['quoteId'] ?? '') !== 'fixture-shipping-quote') throw new MaharaHttpError(409, 'Расчёт доставки устарел.');
+    if (!empty($GLOBALS['mahara_shipping_fixture_expired']) || ($delivery['quoteId'] ?? '') !== 'fixture-shipping-quote') throw new MaharaHttpError(409, 'Расчёт доставки устарел.');
     return ['city' => 'Москва', 'point' => 'MSK-1', 'address' => 'Пункт выдачи', 'quoteId' => 'fixture-shipping-quote', 'shippingAmount' => 50000, 'tariffCode' => 136, 'estimated' => true];
 }
 $checks = 0;
@@ -38,6 +38,15 @@ function payment_verify(bool $condition, string $message): void {
 function payment_error(int $status, callable $action, string $message): void {
     try { $action(); }
     catch (MaharaHttpError $error) { payment_verify($error->status === $status, $message . ': expected ' . $status . ', received ' . $error->status . ' ' . $error->getMessage()); return; }
+    throw new RuntimeException($message . ': expected rejection.');
+}
+function payment_create_error(int $status, array $input, bool $expectedNotCreated, string $message): void {
+    $notCreated = null;
+    try { mahara_payments_create($input, $notCreated); }
+    catch (MaharaHttpError $error) {
+        payment_verify($error->status === $status && $notCreated === $expectedNotCreated, $message);
+        return;
+    }
     throw new RuntimeException($message . ': expected rejection.');
 }
 function payment_uuid(): string { static $n = 0; return sprintf('00000000-0000-4000-8000-%012d', ++$n); }
@@ -168,7 +177,12 @@ $GLOBALS['mahara_payments_test_config']['terms_url'] = 'https://merchant.example
 $tampered = $request; $tampered['items'][0]['unitAmount'] = 1;
 payment_error(400, static fn() => mahara_payments_create($tampered), 'Client price field is rejected');
 $stale = $request; $stale['expectedTotalAmount'] = 370000;
-payment_error(409, static fn() => mahara_payments_create($stale), 'Stale total cannot silently charge a different amount');
+payment_create_error(409, $stale, true, 'A stale total proves no order was created under the inventory lock.');
+$unavailable = $request; $unavailable['items'][0]['qty'] = 20;
+payment_create_error(409, $unavailable, true, 'Insufficient stock marks the pre-INSERT rejection.');
+$expiredQuote = $request; $expiredQuote['delivery']['quoteId'] = 'expired-fixture-quote';
+payment_create_error(409, $expiredQuote, true, 'An expired shipping quote marks the pre-INSERT rejection.');
+payment_verify((int)mahara_query('SELECT COUNT(*) FROM checkout_orders')->fetchColumn() === 0 && mahara_payments_reserved($id, 'S') === 0, 'Rejected checkout attempts leave no orders or reservations.');
 // A publication between quote and create cannot silently change the charge.
 $changedDocument = $document; $changedDocument['products'][0]['price'] = 2000;
 mahara_query('UPDATE content SET document=?,revision=revision+1 WHERE id=1', [json_encode($changedDocument, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)]);
@@ -209,10 +223,13 @@ mahara_inventory_movement($manual, 'fixture');
 payment_verify(payment_balance($id) === 2 && mahara_payments_reserved($id, 'S') === 2, 'Manual count equal to reserved quantity is permitted.');
 $manual['requestId'] = payment_uuid(); $manual['quantity'] = 12; $manual['expectedRevision']++;
 mahara_inventory_movement($manual, 'fixture');
-$count = count($calls); $again = mahara_payments_create($request);
+$count = count($calls); $GLOBALS['mahara_shipping_fixture_expired'] = true;
+$notCreated = true; $again = mahara_payments_create($request, $notCreated);
+unset($GLOBALS['mahara_shipping_fixture_expired']);
 payment_verify($again['order']['id'] === $orderId && $again['accessToken'] === $created['accessToken'] && count(array_filter($calls, static fn(string $method): bool => $method === 'Init')) === 1, 'Retry reuses order and payment instead of Init.');
+payment_verify($notCreated === false && mahara_payments_reserved($id, 'S') === 2, 'An accepted request recovers after shipping expiry without another reservation or a rejection marker.');
 $tampered = $request; $tampered['customer']['name'] = 'Другой покупатель';
-payment_error(409, static fn() => mahara_payments_create($tampered), 'Request ID cannot be reused with changed customer');
+payment_create_error(409, $tampered, false, 'An existing-order identity conflict must not authorize a new request.');
 $otherPending = mahara_payments_create(payment_request($id, 'S')); $otherRow = mahara_payments_row($otherPending['order']['id']);
 payment_verify(mahara_payments_reserved($id, 'S') === 3, 'Reservations for independent orders accumulate.');
 payment_error(409, static fn() => mahara_payments_quote([['id' => $id, 'size' => 'S', 'qty' => 11]]), 'Other orders cannot oversell reserved stock');

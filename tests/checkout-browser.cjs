@@ -111,7 +111,7 @@ async function run() {
       else if (pathname === '/api/checkout/quote') body = quote(request.postDataJSON().items);
       else if (pathname === '/api/checkout/orders' && request.method() === 'POST') {
         const payload = request.postDataJSON(); fixture.created.push(payload);
-        if (fixture.conflict) { fixture.conflict = false; fixture.unitAmount = 1790000; status = 409; body = { error: 'Стоимость изменилась.' }; }
+        if (fixture.conflict) { fixture.conflict = false; fixture.unitAmount = 1790000; status = 409; body = { error: 'Стоимость изменилась.', orderNotCreated: true }; }
         else if (fixture.failCreate) { fixture.failCreate = false; status = 503; body = { error: 'Ответ задерживается.' }; }
         else body = { ...order(), accessToken: token };
       } else if (pathname === '/api/checkout/orders/local-order-1') { fixture.headers.push(request.headers()['x-order-token']); body = order(); }
@@ -295,7 +295,8 @@ async function run() {
     fixture.failCreate = true;
     await page.locator('[data-submit]').click();
     await page.locator('[data-error]').filter({ hasText: 'Ответ задерживается.' }).waitFor();
-    await page.locator('[data-submit]').click();
+    check(await page.locator('[data-checkout]').isHidden(), 'An uncertain order blocks a new checkout and exposes a dedicated retry');
+    await page.locator('[data-retry]').click();
     await page.locator('[data-order]').waitFor({ state: 'visible' });
     equal(fixture.created[1].requestId, fixture.created[2].requestId, 'Uncertain result retries the same idempotent request');
     equal(fixture.created[2].expectedTotalAmount, 1790000, 'Retry uses refreshed authoritative quote');
@@ -401,6 +402,111 @@ async function run() {
       equal(recoveryErrors, [], 'Recovery interactions produce no browser runtime errors');
       equal(fixture.created.length, 3, 'Order lookup and link recovery never create another payment order');
     } finally { await recoveryContext.close(); }
+
+    // The fake server accepts and reserves once, then loses the response. A new
+    // shipping calculation and reload must replay the exact persisted POST,
+    // never build another request from the latest quote or the changed cart.
+    const pendingContext = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
+    const pendingRequests = []; const acceptedRequests = new Map(); let reservedUnits = 0;
+    let dropResponses = 2; let expiredQuoteId = null;
+    try {
+      await pendingContext.route('**/api/**', async route => {
+        if (new URL(route.request().url()).pathname !== '/api/checkout/orders' || route.request().method() !== 'POST') return routeApi(route);
+        const payload = route.request().postDataJSON(); pendingRequests.push(route.request().postData());
+        let result = acceptedRequests.get(payload.requestId);
+        if (!result) {
+          if (payload.delivery.quoteId === expiredQuoteId) return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'Расчёт доставки устарел.', orderNotCreated: true }) });
+          reservedUnits += payload.items.reduce((sum, item) => sum + item.qty, 0);
+          result = { ...order(), order: { ...order().order, status: 'pending' }, accessToken: token };
+          acceptedRequests.set(payload.requestId, result);
+        }
+        if (dropResponses-- > 0) return route.abort('failed');
+        return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(result) });
+      });
+      const pendingPage = await pendingContext.newPage(); const pendingErrors = [];
+      pendingPage.on('pageerror', error => pendingErrors.push(error.message));
+      await pendingPage.goto(`${origin}/checkout.html`);
+      await pendingPage.evaluate(items => localStorage.setItem('maharaCart', JSON.stringify(items)), cart);
+      await pendingPage.reload(); await ready(pendingPage); await fill(pendingPage);
+      await pendingPage.evaluate(() => {
+        const original = Storage.prototype.setItem;
+        window.restoreCheckoutStorage = () => { Storage.prototype.setItem = original; };
+        Storage.prototype.setItem = function (key, value) { if (key === 'maharaCheckoutAttempt') throw new DOMException('Test quota failure', 'QuotaExceededError'); return original.call(this, key, value); };
+      });
+      await pendingPage.locator('[data-submit]').click();
+      await pendingPage.locator('[data-error]').filter({ hasText: 'Заказ не отправлен' }).waitFor();
+      equal(pendingRequests.length, 0, 'No order POST is sent when its complete recovery payload cannot be persisted');
+      await pendingPage.evaluate(() => window.restoreCheckoutStorage());
+      await pendingPage.locator('[data-submit]').click();
+      await pendingPage.locator('[data-error]').filter({ hasText: 'Не удалось подтвердить создание заказа' }).waitFor();
+      const saved = await pendingPage.evaluate(() => JSON.parse(sessionStorage.getItem('maharaCheckoutAttempt')));
+      equal(saved.version, 1, 'The pending recovery record has a version');
+      equal(saved.payload, pendingRequests[0], 'The complete immutable POST was saved before the response was lost');
+      equal(acceptedRequests.size, 1, 'Lost response still represents exactly one accepted fake order');
+      equal(reservedUnits, 1, 'Lost response creates only one fake stock reservation');
+      check(await pendingPage.locator('[data-checkout]').isHidden(), 'Unknown creation result hides the editable form');
+      const pendingBody = JSON.parse(saved.payload); expiredQuoteId = pendingBody.delivery.quoteId;
+      const quotesBefore = fixture.shippingQuotes;
+      // Simulate a late/recalculated quote without replacing the pending POST.
+      await pendingPage.evaluate(() => document.querySelector('[data-calculate-shipping]').click());
+      await pendingPage.waitForFunction(() => document.querySelector('[data-calculate-shipping]').textContent === 'Рассчитать ещё раз');
+      equal(fixture.shippingQuotes, quotesBefore + 1, 'The regression actually obtains a distinct shipping quote after the lost response');
+      await pendingPage.locator('[data-retry]').click();
+      await pendingPage.locator('[data-error]').filter({ hasText: 'Не удалось подтвердить создание заказа' }).waitFor();
+      equal(pendingRequests[1], pendingRequests[0], 'A replacement quote never changes the pending request ID or payload');
+      const changedCart = [{ id: 'hoodie-black', size: 'L', qty: 2 }];
+      await pendingPage.evaluate(items => localStorage.setItem('maharaCart', JSON.stringify(items)), changedCart);
+      const quotesBeforeReload = fixture.shippingQuotes;
+      await pendingPage.reload(); await pendingPage.locator('[data-order]').waitFor({ state: 'visible' });
+      equal(pendingRequests[2], pendingRequests[0], 'Reload automatically retries the original payload even after quote expiry and cart edits');
+      equal(fixture.shippingQuotes, quotesBeforeReload, 'Reload recovers the uncertain order before requesting any new delivery quote');
+      equal(acceptedRequests.size, 1, 'Recalculation and reload do not create another fake order');
+      equal(reservedUnits, 1, 'Recalculation and reload do not reserve the same stock twice');
+      equal(await pendingPage.evaluate(() => sessionStorage.getItem('maharaCheckoutAttempt')), null, 'A confirmed order clears the pending request only after access is stored');
+      equal((await pendingPage.evaluate(() => JSON.parse(sessionStorage.getItem('maharaCheckoutOrder:local-order-1')))).items, cart, 'Recovered order retains its original purchased items instead of the edited cart');
+      equal(await pendingPage.evaluate(() => JSON.parse(localStorage.getItem('maharaCart'))), changedCart, 'Recovering a pending order leaves the current cart untouched');
+      check(!pendingPage.url().includes(token), 'Recovered order bearer is absent from the URL');
+      equal(pendingErrors, [], 'Uncertain checkout recovery has no browser runtime errors');
+    } finally { await pendingContext.close(); }
+
+    // A failed transport before acceptance can leave an expired quote. Only the
+    // explicit server marker lets the customer rebuild that rejected attempt.
+    const rejectedContext = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
+    const rejectedRequests = []; let phase = 'drop'; let rejectionReservations = 0;
+    try {
+      await rejectedContext.route('**/api/**', async route => {
+        if (new URL(route.request().url()).pathname !== '/api/checkout/orders' || route.request().method() !== 'POST') return routeApi(route);
+        rejectedRequests.push(route.request().postDataJSON());
+        if (phase === 'drop') { phase = 'existing-conflict'; return route.abort('failed'); }
+        if (phase === 'existing-conflict') { phase = 'expired'; return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'Статус заказа требует проверки магазина.' }) }); }
+        if (phase === 'expired') { phase = 'accept'; return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'Расчёт доставки устарел.', orderNotCreated: true }) }); }
+        rejectionReservations += 1;
+        return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ ...order(), order: { ...order().order, status: 'pending' }, accessToken: token }) });
+      });
+      const rejectedPage = await rejectedContext.newPage();
+      await rejectedPage.goto(`${origin}/checkout.html`);
+      await rejectedPage.evaluate(items => localStorage.setItem('maharaCart', JSON.stringify(items)), cart);
+      await rejectedPage.reload(); await ready(rejectedPage); await fill(rejectedPage);
+      await rejectedPage.locator('[data-submit]').click();
+      await rejectedPage.locator('[data-error]').filter({ hasText: 'Не удалось подтвердить создание заказа' }).waitFor();
+      await rejectedPage.locator('[data-retry]').click();
+      await rejectedPage.locator('[data-error]').filter({ hasText: 'Статус заказа требует проверки магазина' }).waitFor();
+      check(await rejectedPage.locator('[data-checkout]').isHidden(), 'A generic 409 cannot authorize a second order');
+      check(await rejectedPage.evaluate(() => sessionStorage.getItem('maharaCheckoutAttempt') !== null), 'A generic 409 retains the complete uncertain request');
+      await rejectedPage.reload(); await ready(rejectedPage);
+      await rejectedPage.locator('[data-error]').filter({ hasText: 'Расчёт доставки устарел' }).waitFor();
+      equal(rejectedRequests[2], rejectedRequests[0], 'Expired-quote rejection is obtained by replaying the original payload after reload');
+      equal(await rejectedPage.evaluate(() => sessionStorage.getItem('maharaCheckoutAttempt')), null, 'A proved pre-INSERT rejection releases the attempt');
+      equal(await rejectedPage.locator('#customer-name').inputValue(), 'Иван Тестов', 'Rejected recovery restores the entered name');
+      equal(await rejectedPage.locator('#customer-email').inputValue(), 'customer@example.ru', 'Rejected recovery restores the entered email');
+      equal(await rejectedPage.locator('#customer-phone').inputValue(), '+7 999 123-45-67', 'Rejected recovery restores the entered phone');
+      equal(await rejectedPage.evaluate(() => JSON.parse(localStorage.getItem('maharaCart'))), cart, 'A proved rejection preserves the cart');
+      equal(rejectionReservations, 0, 'No order was reserved for the rejected attempt');
+      await fill(rejectedPage); await rejectedPage.locator('[data-submit]').click(); await rejectedPage.locator('[data-order]').waitFor({ state: 'visible' });
+      check(rejectedRequests[3].requestId !== rejectedRequests[0].requestId, 'A new request ID is allowed only after the previous request was proved uncreated');
+      check(rejectedRequests[3].delivery.quoteId !== rejectedRequests[0].delivery.quoteId, 'The accepted new attempt uses a fresh delivery quote');
+      equal(rejectionReservations, 1, 'Rebuilding a proved rejected request creates one reservation');
+    } finally { await rejectedContext.close(); }
     equal(errors, [], 'No browser runtime errors');
     console.log(`PASS: ${checks} checkout browser checks (guest form, server quote, conflicts, idempotency, token privacy, bank links, paid-only settlement, recovery, mobile layout)`);
     console.log('Screenshots: .local/checkout-preview/desktop.png, mobile-390.png, mobile-320.png');
@@ -469,4 +575,4 @@ async function phpSmoke() {
   }
 }
 
-run().then(phpSmoke).catch(error => { console.error(error); process.exitCode = 1; });
+run().then(() => process.argv.includes('--fake-only') ? undefined : phpSmoke()).catch(error => { console.error(error); process.exitCode = 1; });

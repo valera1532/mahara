@@ -11,7 +11,7 @@
   const FINAL_STATUSES = new Set(['paid', 'canceled', 'cancelled', 'expired', 'failed', 'refunded', 'partial_refunded']);
   const PENDING_STATUSES = new Set(['pending', 'payment_pending', 'awaiting_payment', 'new', 'refund_pending']);
   const bankDomains = ['tbank.ru', 'tinkoff.ru', 'qr.nspk.ru'];
-  const state = { config: null, quote: null, items: [], busy: false, orderId: null, record: null, order: null, poll: null, pollStarted: 0, checking: false, quoteGeneration: 0, qrSource: null, qrValue: null, retry: null };
+  const state = { config: null, quote: null, items: [], busy: false, pending: null, orderId: null, record: null, order: null, poll: null, pollStarted: 0, checking: false, quoteGeneration: 0, qrSource: null, qrValue: null, retry: null };
   const shipping = { config: null, city: null, cities: [], cityQuery: '', activeCity: -1, points: [], filteredPoints: [], activePoint: -1, quote: null, generation: 0, searchGeneration: 0, searchController: null, pointGeneration: 0, busy: false, searchTimer: null, expiryTimer: null };
   const money = amount => new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: amount % 100 ? 2 : 0 }).format(amount / 100);
   const amountValid = value => Number.isSafeInteger(value) && value >= 0;
@@ -19,7 +19,7 @@
   const hide = (selector, value = true) => { $(selector).hidden = value; };
 
   class CheckoutError extends Error {
-    constructor(message, status = 0) { super(message); this.status = status; }
+    constructor(message, status = 0, orderNotCreated = false) { super(message); this.status = status; this.orderNotCreated = orderNotCreated; }
   }
 
   async function api(path, options = {}) {
@@ -34,7 +34,7 @@
       try { data = await response.json(); } catch { throw new CheckoutError('Не удалось получить ответ. Попробуйте ещё раз.', response.status); }
       if (!response.ok) {
         const message = typeof data.error === 'string' ? data.error : typeof data.message === 'string' ? data.message : 'Не удалось выполнить запрос. Попробуйте ещё раз.';
-        throw new CheckoutError(message, response.status);
+        throw new CheckoutError(message, response.status, data.orderNotCreated === true && [400, 409, 422].includes(response.status));
       }
       if (!data || typeof data !== 'object') throw new CheckoutError('Не удалось получить данные заказа.');
       return data;
@@ -141,7 +141,7 @@
   }
 
   function updateSubmit() {
-    $('[data-submit]').disabled = state.busy || !state.available || !state.quote || !$('#accepted-terms').checked || (state.config?.delivery?.mode === 'cdek_receiver' && !shippingValid());
+    $('[data-submit]').disabled = state.busy || Boolean(state.pending) || !state.available || !state.quote || !$('#accepted-terms').checked || (state.config?.delivery?.mode === 'cdek_receiver' && !shippingValid());
     $('[data-submit-label]').textContent = state.busy ? 'Создаём заказ…' : state.quote ? `Оплатить ${money(state.quote.totalAmount)} через СБП` : 'Оплатить через СБП';
     $('[data-checkout-form]').setAttribute('aria-busy', String(state.busy));
   }
@@ -393,19 +393,82 @@
     catch { return false; }
   }
 
-  async function requestId(body) {
-    if (!crypto.subtle) throw new CheckoutError('Для оплаты откройте защищённую версию сайта через HTTPS.');
-    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(body)));
-    const signature = [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+  function savedAttempt() {
     let saved;
-    try { saved = JSON.parse(sessionStorage.getItem(ATTEMPT_KEY) || 'null'); } catch { /* A fresh attempt is safe before the first request. */ }
-    if (saved?.signature === signature && typeof saved.requestId === 'string') return saved.requestId;
-    const value = uuid(); sessionStorage.setItem(ATTEMPT_KEY, JSON.stringify({ signature, requestId: value })); return value;
+    try { saved = JSON.parse(sessionStorage.getItem(ATTEMPT_KEY) || 'null'); }
+    catch { throw new CheckoutError('Не удалось прочитать предыдущее оформление. Не создавайте повторный заказ: найдите его по почте или обратитесь в магазин.'); }
+    if (saved === null) return null;
+    // Old versions saved only a hash and cannot reconstruct an uncertain POST.
+    // Do not silently replace that record with a new order identifier.
+    if (saved?.version !== 1 || typeof saved.payload !== 'string' || saved.payload.length > 32768) throw new CheckoutError('Не удалось восстановить предыдущее оформление. Не создавайте повторный заказ: найдите его по почте или обратитесь в магазин.');
+    let body;
+    try { body = JSON.parse(saved.payload); } catch { throw new CheckoutError('Не удалось восстановить предыдущее оформление. Обратитесь в магазин перед повторным заказом.'); }
+    if (!body || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(body.requestId) || !Array.isArray(body.items) || !body.items.length || !body.customer || !body.delivery || body.acceptedTerms !== true || !amountValid(body.expectedTotalAmount)) throw new CheckoutError('Не удалось восстановить предыдущее оформление. Обратитесь в магазин перед повторным заказом.');
+    return saved;
+  }
+
+  function rememberAttempt(body) {
+    const attempt = { version: 1, payload: JSON.stringify({ ...body, requestId: uuid() }) };
+    try { sessionStorage.setItem(ATTEMPT_KEY, JSON.stringify(attempt)); }
+    catch { throw new CheckoutError('Не удалось сохранить оформление в браузере. Заказ не отправлен. Разрешите хранение данных и попробуйте снова.'); }
+    state.pending = attempt;
+    return attempt;
+  }
+
+  function restoreAttemptFields(body) {
+    for (const key of ['name', 'phone', 'email']) $(`#customer-${key}`).value = body.customer[key] || '';
+    for (const key of ['city', 'point', 'address']) $(`#delivery-${key}`).value = body.delivery[key] || '';
+    $('#accepted-terms').checked = body.acceptedTerms === true;
+  }
+
+  async function sendAttempt(attempt) {
+    if (state.busy || !attempt) return;
+    state.pending = attempt; state.busy = true; clearError(); updateSubmit();
+    hide('[data-checkout]'); hide('[data-empty]');
+    const body = JSON.parse(attempt.payload);
+    try {
+      // Reuse the exact saved bytes, including quoteId, even after its expiry,
+      // a recalculation, cart edits or a document reload. The server first looks
+      // up requestId and recovers an existing order before validating the quote.
+      const result = await api('/api/checkout/orders', { method: 'POST', body: attempt.payload });
+      if (!idValid(result.order?.id) || typeof result.order.status !== 'string' || !amountValid(result.order.totalAmount) || result.order.currency !== 'RUB' || typeof result.accessToken !== 'string' || result.accessToken.length < 16 || result.accessToken.length > 1024) throw new CheckoutError('Не удалось сохранить доступ к заказу.');
+      const record = { token: result.accessToken, items: body.items.map(item => ({ ...item })), cleared: false };
+      // Keep the pending POST until the capability is safely stored. A storage
+      // failure must recover the same order rather than create another one.
+      sessionStorage.setItem(ORDER_KEY + result.order.id, JSON.stringify(record));
+      state.orderId = result.order.id; state.record = record;
+      try { sessionStorage.removeItem(ATTEMPT_KEY); } catch { /* Replaying it remains idempotent. */ }
+      state.pending = null;
+      history.replaceState(null, '', `${location.pathname}?order=${encodeURIComponent(state.orderId)}`);
+      await showOrder(result);
+      $('[data-order-title]').setAttribute('tabindex', '-1'); $('[data-order-title]').focus({ preventScroll: true });
+      $('[data-order]').scrollIntoView({ block: 'start', behavior: 'auto' });
+      state.pollStarted = Date.now(); schedulePoll();
+    } catch (error) {
+      if (state.orderId) { showError(error.message, () => checkStatus(true)); return; }
+      if (error.orderNotCreated === true) {
+        try { sessionStorage.removeItem(ATTEMPT_KEY); } catch { /* No order exists for this rejected request. */ }
+        state.pending = null; restoreAttemptFields(body);
+        try {
+          if (state.config) { await refreshQuote(); if (state.config.delivery?.mode === 'cdek_receiver') await calculateShipping(); }
+          else await initialize();
+          showError(`${error.message} Проверьте сумму, наличие и доставку перед повторным оформлением.`);
+        } catch (quoteError) { showError(quoteError.message, initialize); }
+      } else showError(`Не удалось подтвердить создание заказа. ${error.message} Повторите проверку: новое оформление пока недоступно, чтобы не создать второй заказ.`, () => sendAttempt(state.pending));
+    } finally { state.busy = false; hide('[data-loading]'); updateSubmit(); }
+  }
+
+  async function startCheckout() {
+    try {
+      const pending = savedAttempt();
+      if (pending) await sendAttempt(pending);
+      else await initialize();
+    } catch (error) { hide('[data-loading]'); hide('[data-checkout]'); showError(error.message); }
   }
 
   async function submit(event) {
     event.preventDefault();
-    if (state.busy || !state.available || !state.quote || !$('#accepted-terms').checked) return;
+    if (state.busy || state.pending || !state.available || !state.quote || !$('#accepted-terms').checked) return;
     const form = event.currentTarget;
     const normalizedPhone = $('#customer-phone').value.replace(/[\s()-]/g, '');
     $('#customer-phone').setCustomValidity(/^(?:\+[1-9][0-9]{9,14}|8[0-9]{10})$/.test(normalizedPhone) ? '' : 'Укажите телефон с кодом страны, например +7 999 123-45-67.');
@@ -420,25 +483,13 @@
       }
       if (!storageAvailable()) throw new CheckoutError('Разрешите хранение данных в браузере, чтобы сохранить доступ к оплате заказа.');
       if (state.config.delivery?.mode === 'cdek_receiver' && !shippingValid()) throw new CheckoutError('Выберите пункт выдачи и рассчитайте доставку перед оплатой.');
-      state.busy = true; updateSubmit();
       const values = new FormData(form);
       const delivery = state.config.delivery?.mode === 'cdek_receiver'
         ? { city: shipping.quote.point.city, point: shipping.quote.point.code, address: shipping.quote.point.address, quoteId: shipping.quote.quoteId }
         : { city: values.get('city').trim(), point: values.get('point').trim(), address: values.get('address').trim() };
       const body = { items, customer: { name: values.get('name').trim(), email: values.get('email').trim(), phone: values.get('phone').trim() }, delivery, acceptedTerms: true, expectedTotalAmount: state.quote.totalAmount };
-      body.requestId = await requestId(body);
-      const result = await api('/api/checkout/orders', { method: 'POST', body: JSON.stringify(body) });
-      if (!idValid(result.order?.id) || typeof result.accessToken !== 'string' || result.accessToken.length < 16 || result.accessToken.length > 1024) throw new CheckoutError('Не удалось сохранить доступ к заказу. Повторите оформление в этой вкладке.');
-      state.orderId = result.order.id;
-      state.record = { token: result.accessToken, items: items.map(item => ({ ...item })), cleared: false };
-      sessionStorage.setItem(ORDER_KEY + state.orderId, JSON.stringify(state.record));
-      sessionStorage.removeItem(ATTEMPT_KEY);
-      history.replaceState(null, '', `${location.pathname}?order=${encodeURIComponent(state.orderId)}`);
-      hide('[data-checkout]'); hide('[data-empty]');
-      await showOrder(result);
-      $('[data-order-title]').setAttribute('tabindex', '-1'); $('[data-order-title]').focus({ preventScroll: true });
-      $('[data-order]').scrollIntoView({ block: 'start', behavior: 'auto' });
-      state.pollStarted = Date.now(); schedulePoll();
+      if (!crypto.subtle) throw new CheckoutError('Для оплаты откройте защищённую версию сайта через HTTPS.');
+      await sendAttempt(rememberAttempt(body));
     } catch (error) {
       if (error.status === 409) {
         try { await refreshQuote(); } catch (quoteError) { showError(quoteError.message); return; }
@@ -663,7 +714,7 @@
     }
   });
   window.addEventListener('storage', event => {
-    if (event.key === CART_KEY && !state.orderId && !state.busy && state.config) refreshQuote().catch(error => showError(error.message));
+    if (event.key === CART_KEY && !state.orderId && !state.pending && !state.busy && state.config) refreshQuote().catch(error => showError(error.message));
   });
   window.addEventListener('pagehide', stopPoll);
   window.addEventListener('pageshow', event => { if (event.persisted && state.orderId) checkStatus(true); });
@@ -672,5 +723,5 @@
   configureRecovery();
   if (access !== null) recoverAccess(access);
   else if (orderId !== null) restoreOrder(orderId);
-  else initialize();
+  else startCheckout();
 })();

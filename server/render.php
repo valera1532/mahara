@@ -312,7 +312,7 @@ function mhRenderHead(string $route, array $sections, array $products, ?array $p
   <script type="application/ld+json">{$json}</script>
   <script defer src="catalog-data.js?v=20261011-2"></script>
   <script defer src="cms-data.js?v=20261011-2"></script>
-  <script defer src="script.js?v=20261011-2"></script>
+  <script defer src="script.js?v=20261012-1"></script>
 </head>
 HTML;
 }

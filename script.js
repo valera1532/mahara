@@ -34,6 +34,7 @@
     availabilityError: false,
     quickProduct: null,
     quickSize: null,
+    selectedSizes: new Map(),
     filters: {
       category: 'all',
       sizes: new Set(),
@@ -149,7 +150,16 @@
         toggleFavorite(product.id);
       });
 
-      $$('[data-size-choice]', card).forEach(button => {
+      const sizeButtons = $$('[data-size-choice]', card);
+      const rememberedSize = state.selectedSizes.get(product.id);
+      const defaultSize = $('[data-size-choice].is-active', card)?.dataset.sizeChoice;
+      const selectedSize = product.sizes.includes(rememberedSize) ? rememberedSize
+        : product.sizes.includes(defaultSize) ? defaultSize : product.sizes[0];
+      state.selectedSizes.set(product.id, selectedSize);
+      sizeButtons.forEach(button => {
+        const active = button.dataset.sizeChoice === selectedSize;
+        button.classList.toggle('is-active', active);
+        button.setAttribute('aria-pressed', String(active));
         button.addEventListener('click', () => {
           $$('[data-size-choice]', card).forEach(item => {
             item.classList.remove('is-active');
@@ -157,6 +167,7 @@
           });
           button.classList.add('is-active');
           button.setAttribute('aria-pressed', 'true');
+          state.selectedSizes.set(product.id, button.dataset.sizeChoice);
           updateStockUI();
         });
       });

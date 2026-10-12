@@ -367,7 +367,8 @@ function mahara_payments_receipt(array $row): array {
     return $receipt;
 }
 
-function mahara_payments_create(mixed $input): array {
+function mahara_payments_create(mixed $input, ?bool &$orderNotCreated = null): array {
+    $orderNotCreated = false;
     mahara_object($input, ['requestId', 'items', 'customer', 'delivery', 'acceptedTerms', 'expectedTotalAmount'], 'Заказ');
     $requestId = mahara_payments_uuid($input['requestId']);
     if ($input['acceptedTerms'] !== true) mahara_fail('Подтвердите условия заказа.');
@@ -393,20 +394,28 @@ function mahara_payments_create(mixed $input): array {
         return mahara_payments_view($row) + ['accessToken' => $row['access_token']];
     }
     if (!mahara_payments_public_config()['enabled']) throw new MaharaHttpError(503, 'Онлайн-оплата пока не подключена.');
-    $row = mahara_payments_transaction(static function () use ($requestId, $payload, $items, $customer, $delivery, $expected, $receiver): array {
+    $row = mahara_payments_transaction(static function () use ($requestId, $payload, $items, $customer, $delivery, $expected, $receiver, &$orderNotCreated): array {
         $previous = mahara_query('SELECT * FROM checkout_orders WHERE request_id=?', [$requestId])->fetch();
         if ($previous) {
             if (!hash_equals($previous['request_payload'], $payload)) throw new MaharaHttpError(409, 'Идентификатор заказа уже использован с другими данными.');
             return $previous;
         }
-        $quote = mahara_payments_quote($items);
-        if ($quote['totalAmount'] !== $expected) throw new MaharaHttpError(409, 'Стоимость заказа изменилась. Проверьте сумму и подтвердите заказ повторно.');
-        if ($quote['totalAmount'] < 1000) mahara_fail('Минимальная сумма оплаты СБП — 10 рублей.');
-        if ($receiver) {
-            if (!function_exists('mahara_shipping_validate')) throw new MaharaHttpError(503, 'Расчёт доставки пока не подключён.');
-            // This hook validates a persisted, cart-bound CDEK quote locally;
-            // it must not make network calls while SQLite's lock is held.
-            $delivery = mahara_shipping_validate($delivery, $items);
+        try {
+            $quote = mahara_payments_quote($items);
+            if ($quote['totalAmount'] !== $expected) throw new MaharaHttpError(409, 'Стоимость заказа изменилась. Проверьте сумму и подтвердите заказ повторно.');
+            if ($quote['totalAmount'] < 1000) mahara_fail('Минимальная сумма оплаты СБП — 10 рублей.');
+            if ($receiver) {
+                if (!function_exists('mahara_shipping_validate')) throw new MaharaHttpError(503, 'Расчёт доставки пока не подключён.');
+                // This hook validates a persisted, cart-bound CDEK quote locally;
+                // it must not make network calls while SQLite's lock is held.
+                $delivery = mahara_shipping_validate($delivery, $items);
+            }
+        } catch (MaharaHttpError $error) {
+            // Only this locked, pre-INSERT validation proves that the request
+            // has no order/reservation. A 409 from an existing order's bank
+            // reconciliation must never authorize a new checkout attempt.
+            if (in_array($error->status, [400, 409, 422], true)) $orderNotCreated = true;
+            throw $error;
         }
         $config = mahara_payments_config(); $secrets = mahara_payments_secrets(); $now = time(); $legal = mahara_payments_legal_snapshot();
         $ttl = is_int($config['payment_ttl']) ? max(60, min(86400, $config['payment_ttl'])) : 900;
@@ -722,7 +731,13 @@ function mahara_payments_api(string $path, string $method): bool {
         $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
         $retry = mahara_throttle(hash('sha256', 'checkout:' . $ip), 20);
         if ($retry) { header('Retry-After: ' . $retry); throw new MaharaHttpError(429, 'Слишком много заказов. Повторите попытку позже.'); }
-        mahara_json(mahara_payments_create(mahara_read_json(32768)), 201);
+        $input = mahara_read_json(32768); $orderNotCreated = false;
+        try { $result = mahara_payments_create($input, $orderNotCreated); }
+        catch (MaharaHttpError $error) {
+            if ($orderNotCreated) mahara_json(['error' => $error->getMessage(), 'orderNotCreated' => true], $error->status);
+            throw $error;
+        }
+        mahara_json($result, 201);
     }
     if ($route === 'get') {
         $row = mahara_payments_row($id); $token = $_SERVER['HTTP_X_ORDER_TOKEN'] ?? '';

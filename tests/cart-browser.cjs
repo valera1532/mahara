@@ -10,7 +10,7 @@ const path = require('node:path');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'C:/Users/valer/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
 const ROOT = path.resolve(__dirname, '..');
 const defaults = JSON.parse(fs.readFileSync(path.join(ROOT, 'site-defaults.json'), 'utf8'));
-const fixture = { content: structuredClone(defaults), failAvailability: false, maxQty: 20, calls: [] };
+const fixture = { content: structuredClone(defaults), failAvailability: false, maxQty: 20, blockedVariant: null, calls: [] };
 let checks = 0;
 const check = (condition, message) => { checks++; assert.ok(condition, message); };
 const equal = (actual, expected, message) => { checks++; assert.deepEqual(actual, expected, message); };
@@ -43,7 +43,11 @@ async function run() {
       if (pathname === '/api/content') return route.fulfill({ json: { ...fixture.content, revision: 1 } });
       if (pathname === '/api/catalog/availability') {
         if (fixture.failAvailability) return route.fulfill({ status: 503, json: { error: 'Fixture unavailable' } });
-        return route.fulfill({ json: { products: fixture.content.products.map(product => ({ id: product.id, variants: product.sizes.map(size => ({ size, status: product.id === 'hoodie-black' && size === 'S' ? 'out' : product.id === 'hoodie-black' && size === 'XL' ? 'untracked' : 'available', maxQty: product.id === 'hoodie-black' && ['S', 'XL'].includes(size) ? 0 : fixture.maxQty })) })) } });
+        return route.fulfill({ json: { products: fixture.content.products.map(product => ({ id: product.id, variants: product.sizes.map(size => {
+          const blocked = fixture.blockedVariant?.id === product.id && fixture.blockedVariant.size === size;
+          const status = blocked || product.id === 'hoodie-black' && size === 'S' ? 'out' : product.id === 'hoodie-black' && size === 'XL' ? 'untracked' : 'available';
+          return { size, status, maxQty: status === 'available' ? fixture.maxQty : 0 };
+        }) })) } });
       }
       return route.fulfill({ status: 503, json: { error: 'Not permitted in storefront fixture' } });
     };
@@ -151,6 +155,57 @@ async function run() {
     equal(await page.locator('[data-newsletter-form]').count(), 0, 'Unimplemented newsletter form does not collect email');
     equal(await page.locator('[data-newsletter-social] a').count(), 2, 'Newsletter area offers real social destinations');
     check(!(await page.locator('body').textContent()).includes('по миру'), 'Storefront does not promise unsupported worldwide shipping');
+
+    console.log('Storefront: chosen sizes survive returning to a refreshed catalog/product page');
+    for (const [label, route, selector, titleSelector] of [
+      ['Catalog', 'catalog.html', '.product-card[data-product-id="hoodie-green"]', 'h3 a'],
+      ['Product page', 'product-hoodie-green.html', '[data-product-detail]', '#product-title']
+    ]) {
+      const selectionContext = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
+      await selectionContext.route('**/api/**', routeApi);
+      const selectionPage = await selectionContext.newPage();
+      selectionPage.on('pageerror', error => errors.push(error.message));
+      try {
+        await selectionPage.goto(`${origin}/${route}`);
+        await selectionPage.locator('body.is-ready').waitFor();
+        const product = fixture.content.products.find(item => item.id === 'hoodie-green');
+        const productNode = selectionPage.locator(selector);
+        await selectionPage.waitForFunction(selector => !document.querySelector(`${selector} [data-size-choice="XL"]`)?.disabled, selector);
+        await productNode.locator('[data-size-choice="XL"]').click();
+        const refresh = async suffix => {
+          product.title = `Худи MAHARA Green — ${label} ${suffix}`;
+          const stockResponse = selectionPage.waitForResponse(response => new URL(response.url()).pathname === '/api/catalog/availability');
+          await selectionPage.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+          await productNode.locator(titleSelector).filter({ hasText: product.title }).waitFor();
+          await stockResponse;
+          await selectionPage.waitForFunction(({ selector, unavailable }) => document.querySelector(`${selector} [data-add-cart]`)?.disabled === unavailable, { selector, unavailable: Boolean(fixture.blockedVariant) });
+        };
+        await refresh('updated');
+        equal(await productNode.locator('[data-size-choice].is-active').getAttribute('data-size-choice'), 'XL', `${label}: CMS refresh preserves the chosen XL size`);
+        equal(await productNode.locator('[data-size-choice][aria-pressed="true"]').count(), 1, `${label}: restored size remains the single accessible selection`);
+        await productNode.locator('[data-add-cart]').click();
+        await waitQty(selectionPage, 'hoodie-green', 'XL', 1);
+        equal(await cart(selectionPage), [{ id: 'hoodie-green', size: 'XL', qty: 1 }], `${label}: adding after refresh puts XL into the cart`);
+
+        fixture.blockedVariant = { id: 'hoodie-green', size: 'XL' };
+        await refresh('sold out');
+        check(await productNode.locator('[data-size-choice="XL"]').isDisabled(), `${label}: preserved XL is disabled when availability changes`);
+        check(await productNode.locator('[data-add-cart]').isDisabled(), `${label}: preserving a choice cannot bypass stock restrictions`);
+        equal(await productNode.locator('[data-size-choice].is-active').getAttribute('data-size-choice'), 'XL', `${label}: sold-out selection does not silently change the buyer's size`);
+
+        fixture.blockedVariant = null;
+        product.sizes = product.sizes.filter(size => size !== 'XL');
+        await refresh('size removed');
+        equal(await productNode.locator('[data-size-choice="XL"]').count(), 0, `${label}: removed size is not restored into published controls`);
+        check(product.sizes.includes(await productNode.locator('[data-size-choice].is-active').getAttribute('data-size-choice')), `${label}: removing XL selects a size that still exists`);
+        equal(await cart(selectionPage), [{ id: 'hoodie-green', size: 'XL', qty: 1 }], `${label}: refreshing sizes does not rewrite an existing cart item`);
+      } finally {
+        fixture.content = structuredClone(defaults);
+        fixture.blockedVariant = null;
+        await selectionContext.close();
+      }
+    }
+
     const mobile = await browser.newContext({ viewport: { width: 320, height: 740 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
     await mobile.route('**/api/**', routeApi);
     const touch = await mobile.newPage(); touch.on('pageerror', error => errors.push(error.message));
@@ -162,7 +217,7 @@ async function run() {
     equal(errors, [], 'Storefront changes produce no browser runtime errors');
     check(fixture.calls.every(([method, pathname]) => method === 'GET' && ['/api/content', '/api/catalog/availability'].includes(pathname)), 'All fixture calls are read-only; no stock, orders or provider endpoints');
     await mobile.close(); await context.close();
-    console.log(`PASS: ${checks} storefront checks (cart synchronization, bounded quantities, unavailable products, favorites, stock, honest subscription, mobile touch)`);
+    console.log(`PASS: ${checks} storefront checks (cart synchronization, bounded quantities, selected-size refresh, unavailable products, favorites, stock, honest subscription, mobile touch)`);
   } finally { if (browser) await browser.close(); await new Promise(resolve => server.close(resolve)); }
 }
 async function readyWithoutCards(page) { await page.locator('body.is-ready').waitFor(); await page.locator('[data-favorites-filter]').waitFor(); }
