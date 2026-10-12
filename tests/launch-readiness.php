@@ -95,6 +95,37 @@ try {
     mahara_query('UPDATE inventory_balances SET quantity=7');
     launch_check((int)$copy->query('SELECT quantity FROM inventory_balances')->fetchColumn() === 1, 'Snapshot independent from later writes.');
     unset($copy);
+
+    // Exercise the old-SQLite path directly even on a newer development runtime.
+    // A committed WAL update and an outstanding writer must produce a complete
+    // snapshot of committed data, without copying or mutating the live DB file.
+    mahara_db()->exec('PRAGMA wal_checkpoint(TRUNCATE); PRAGMA wal_autocheckpoint=0;');
+    mahara_query('UPDATE inventory_balances SET quantity=8');
+    clearstatcache();
+    launch_check(is_file($directory . '/data/mahara.sqlite-wal') && filesize($directory . '/data/mahara.sqlite-wal') > 32, 'Fallback fixture keeps the latest committed stock in an active WAL.');
+    mahara_db()->beginTransaction();
+    try {
+        mahara_query('UPDATE inventory_balances SET quantity=9');
+        $onlinePath = $directory . '/online-backup/mahara.sqlite';
+        mahara_backup_database_online($onlinePath);
+        $online = new PDO('sqlite:' . $onlinePath, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+        launch_check($online->query('PRAGMA integrity_check')->fetchColumn() === 'ok', 'Native online fallback snapshot passes integrity_check.');
+        launch_check((int)$online->query('SELECT quantity FROM inventory_balances')->fetchColumn() === 8, 'Native online fallback includes committed WAL data and excludes the active uncommitted writer.');
+        launch_check((int)mahara_query('SELECT quantity FROM inventory_balances')->fetchColumn() === 9, 'Read-only fallback leaves the live transaction unchanged.');
+    } finally { mahara_db()->rollBack(); }
+    mahara_query('UPDATE inventory_balances SET quantity=10');
+    launch_check((int)$online->query('SELECT quantity FROM inventory_balances')->fetchColumn() === 8, 'Native online snapshot stays independent of later live writes.');
+    launch_reject(static fn() => mahara_backup_database_online($onlinePath), 'Native online fallback refuses to overwrite an existing snapshot.');
+    launch_check((int)$online->query('SELECT quantity FROM inventory_balances')->fetchColumn() === 8, 'Rejected overwrite preserves the original snapshot.');
+    launch_reject(static fn() => mahara_backup_database_online(dirname(__DIR__) . '/public-online-backup/mahara.sqlite'), 'Native online fallback refuses a public destination.');
+    unset($online);
+    $onlineManifest = dirname($onlinePath) . '/manifest.json';
+    file_put_contents($onlineManifest, json_encode(['version' => 1, 'files' => ['mahara.sqlite' => hash_file('sha256', $onlinePath)]], JSON_THROW_ON_ERROR));
+    chmod($onlineManifest, 0600);
+    launch_check(mahara_backup_verify(dirname($onlinePath)) === ['files' => 1, 'verified' => true], 'Native online snapshot passes the normal manifest checksum and integrity verification.');
+    if (PHP_OS_FAMILY !== 'Windows') {
+        launch_check((fileperms($onlinePath) & 0777) === 0600 && (fileperms(dirname($onlinePath)) & 0777) === 0700, 'Native online snapshot and directory retain private permissions.');
+    }
     file_put_contents($snapshot['directory'] . '/uploads/' . $uploadName, 'tampered');
     launch_reject(static fn() => mahara_backup_verify($snapshot['directory']), 'Corrupt upload rejected by checksum.');
     launch_reject(static fn() => mahara_private_backup_base(dirname(__DIR__) . '/public-backup'), 'Backup refuses public website path.');

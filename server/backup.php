@@ -36,6 +36,38 @@ function mahara_private_backup_base(string $directory): string {
     return $base;
 }
 
+function mahara_backup_database_online(string $snapshot): void {
+    if (!class_exists('SQLite3') || !method_exists('SQLite3', 'backup')) throw new RuntimeException('SQLite below 3.27 requires the SQLite3 extension with native online backup support. No live database file copy was used.');
+    $base = mahara_private_backup_base(dirname($snapshot));
+    if (basename($snapshot) !== 'mahara.sqlite') throw new RuntimeException('Invalid backup database filename.');
+    $snapshot = $base . DIRECTORY_SEPARATOR . 'mahara.sqlite';
+    $sourceFile = null;
+    foreach (mahara_db()->query('PRAGMA database_list') as $database) {
+        if ($database['name'] === 'main') $sourceFile = realpath($database['file']);
+    }
+    $configuredFile = realpath(mahara_config()['data_dir'] . '/mahara.sqlite');
+    if (!$sourceFile || !$configuredFile || (PHP_OS_FAMILY === 'Windows' ? strcasecmp($sourceFile, $configuredFile) !== 0 : $sourceFile !== $configuredFile)) throw new RuntimeException('Cannot identify the live private database for online backup.');
+    // Reserve a new file exclusively: the native API must never overwrite an
+    // existing snapshot, follow a destination symlink or open the live DB.
+    $file = @fopen($snapshot, 'x+b');
+    if ($file === false) throw new RuntimeException('Online backup requires a new private destination file.');
+    fclose($file); @chmod($snapshot, 0600);
+    $source = null; $destination = null; $complete = false;
+    try {
+        $source = new SQLite3($sourceFile, SQLITE3_OPEN_READONLY);
+        $source->enableExceptions(true);
+        $destination = new SQLite3($snapshot, SQLITE3_OPEN_READWRITE);
+        $destination->enableExceptions(true);
+        if (!$source->busyTimeout(5000) || !$destination->busyTimeout(5000)) throw new RuntimeException('Cannot configure the online backup timeout.');
+        if (!$source->backup($destination, 'main', 'main')) throw new RuntimeException('SQLite3 online backup did not complete.');
+        $complete = true;
+    } finally {
+        if ($destination !== null) $destination->close();
+        if ($source !== null) $source->close();
+        if (!$complete) @unlink($snapshot);
+    }
+}
+
 function mahara_backup_create(string $directory): array {
     $base = mahara_private_backup_base($directory);
     $destination = $base . DIRECTORY_SEPARATOR . 'mahara-' . gmdate('Ymd-His') . '-' . bin2hex(random_bytes(5));
@@ -43,7 +75,9 @@ function mahara_backup_create(string $directory): array {
     $snapshot = $destination . '/mahara.sqlite';
     // SQLite writes a consistent snapshot including committed WAL pages. Never
     // copy the live database file and never fall back to a WAL-unsafe copy.
-    mahara_db()->exec('VACUUM INTO ' . mahara_db()->quote($snapshot));
+    $version = (string)mahara_db()->query('SELECT sqlite_version()')->fetchColumn();
+    if (version_compare($version, '3.27.0', '>=')) mahara_db()->exec('VACUUM INTO ' . mahara_db()->quote($snapshot));
+    else mahara_backup_database_online($snapshot);
     @chmod($snapshot, 0600);
     $files = ['mahara.sqlite' => hash_file('sha256', $snapshot)];
     $uploads = mahara_config()['data_dir'] . '/uploads';

@@ -4,6 +4,10 @@ DirectoryIndex index.php
 <IfModule mod_rewrite.c>
   RewriteEngine On
 
+  # Keep the www alias on HTTPS when redirecting to the production origin.
+  RewriteCond %{HTTP_HOST} ^www\.maharussia\.ru(?::[0-9]+)?$ [NC]
+  RewriteRule ^ https://maharussia.ru%{REQUEST_URI} [R=301,END,NE]
+
   # Private source, configuration, credentials and development files.
   RewriteRule (^|/)\. - [F,END]
   RewriteRule ^(?:server|tools|data|tests|preview|node_modules)(?:/|$) - [F,END,NC]
