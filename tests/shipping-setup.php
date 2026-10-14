@@ -61,7 +61,7 @@ cdek_check($repeat['location'] === '/admin/shipping-setup?result=storage_exists_
 $contents = file_get_contents($path); file_put_contents($path, '<?php throw new RuntimeException("GET-must-not-read-fixture");'); $page = mahara_shipping_setup_prepare('GET');
 cdek_check($page['secretPresent'] && !isset($page['account'], $page['password']), 'GET uses metadata without reading secret file.'); file_put_contents($path, $contents); unset($contents);
 $html = (static function ($view): string { $csrfToken = $view['csrfToken']; $secretPresent = $view['secretPresent']; $notice = $view['notice']; ob_start(); require dirname(__DIR__) . '/server/templates/admin-shipping-setup.php'; return (string)ob_get_clean(); })($page);
-foreach (['account', 'password'] as $field) cdek_check(preg_match('/<input[^>]*name="' . $field . '"[^>]*>/', $html, $input) === 1 && !preg_match('/\bvalue\s*=/', $input[0]), 'Rendered credential inputs never prepopulate.');
+foreach (['account', 'password'] as $field) cdek_check(preg_match('/<input[^>]*name="' . $field . '"[^>]*>/', $html, $input) === 1 && !preg_match('/\bvalue\s*=/', $input[0]) && str_contains($input[0], 'autocomplete="' . ($field === 'password' ? 'new-password' : 'off') . '"'), 'Credential inputs stay empty; the separate API secret uses new-password instead of saved site credentials.');
 cdek_check(!str_contains($html, $form['account']) && !str_contains($html, $form['password']) && substr_count($html, 'name="csrf_token"') === 3, 'HTML contains no credentials and every native form carries CSRF.');
 $calls = 0; $oauthToken = 'fixture-oauth-token-never-output';
 $transport = static function ($url, $payload, $policy) use (&$calls, $form, $oauthToken): array {

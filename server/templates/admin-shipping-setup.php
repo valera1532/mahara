@@ -103,7 +103,8 @@ $setupNoticeMessage = is_array($notice ?? null) && is_string($notice['message'] 
               </div>
               <div class="cms-field">
                 <label for="cdek-password">Secure password (пароль API)</label>
-                <input id="cdek-password" name="password" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" required aria-describedby="cdek-password-hint" />
+                <?php // The CDEK API secret is separate from saved site credentials; avoid stored-password autofill. ?>
+                <input id="cdek-password" name="password" type="password" autocomplete="new-password" autocapitalize="none" spellcheck="false" required aria-describedby="cdek-password-hint" />
                 <p class="cms-field__hint" id="cdek-password-hint">После отправки поле пароля будет пустым. Сохранённый пароль не показывается на странице.</p>
               </div>
             </fieldset>
