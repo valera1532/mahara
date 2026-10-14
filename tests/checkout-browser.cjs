@@ -21,7 +21,7 @@ const cart = [{ id: 'hoodie-black', size: 'M', qty: 1 }];
 const token = 'local-checkout-test-token-0123456789';
 const recoveryToken = 'R'.repeat(43); const expiredRecoveryToken = 'E'.repeat(43);
 const recoveryMessage = 'Если номер и почта совпали с заказом, мы отправим ссылку для доступа. Проверьте также папку «Спам».';
-const fixture = { enabled: true, unitAmount: 1690000, orderStatus: 'pending', paymentUrl: 'https://qr.nspk.ru/local-fixture', paymentExpiresAt: null, paymentUnavailable: false, conflict: false, failCreate: false, shippingEstimateEnabled: undefined, shippingQuoteOverride: null, shippingQuoteFailure: false, shippingRequests: [], shippingExpiresIn: 1200, shippingQuotes: 0, quoteDelayByPoint: {}, cityRequests: [], created: [], headers: [], recoveryEnabled: false, recoveryRequests: [], recoveryExchanges: [], usedRecoveryTokens: new Set(), recoveryDelay: 0 };
+const fixture = { enabled: true, legal: { termsUrl: 'https://legal.example.ru/offer', privacyUrl: '/privacy.html' }, unitAmount: 1690000, orderStatus: 'pending', paymentUrl: 'https://qr.nspk.ru/local-fixture', paymentExpiresAt: null, paymentUnavailable: false, conflict: false, failCreate: false, shippingEstimateEnabled: undefined, shippingQuoteOverride: null, shippingQuoteFailure: false, shippingRequests: [], shippingExpiresIn: 1200, shippingQuotes: 0, quoteDelayByPoint: {}, cityRequests: [], created: [], headers: [], recoveryEnabled: false, recoveryRequests: [], recoveryExchanges: [], usedRecoveryTokens: new Set(), recoveryDelay: 0 };
 const point = { code: 'MSK1', city: 'Москва', cityCode: 44, address: 'Тестовая улица, 1', name: 'Тестовый пункт' };
 const points = [point,
   { code: 'MSK2', city: 'Москва', cityCode: 44, address: 'Лесная улица, 2', name: 'Пункт у метро' },
@@ -81,7 +81,7 @@ async function run() {
       const request = route.request();
       const pathname = new URL(request.url()).pathname;
       let status = 200; let body;
-      if (pathname === '/api/checkout/config') body = { enabled: fixture.enabled, currency: 'RUB', delivery: { mode: 'cdek_receiver', label: 'Доставка СДЭК', amount: 0 }, message: fixture.enabled ? '' : 'Оформление временно недоступно.', legal: { termsUrl: 'https://legal.example.ru/offer', privacyUrl: '/privacy.html' } };
+      if (pathname === '/api/checkout/config') body = { enabled: fixture.enabled, currency: 'RUB', delivery: { mode: 'cdek_receiver', label: 'Доставка СДЭК', amount: 0 }, message: fixture.enabled ? '' : 'Оформление временно недоступно.', legal: fixture.legal };
       else if (pathname === '/api/checkout/recovery/config') body = { enabled: fixture.recoveryEnabled };
       else if (pathname === '/api/checkout/recovery/request' && request.method() === 'POST') {
         fixture.recoveryRequests.push(request.postDataJSON()); body = { message: recoveryMessage };
@@ -134,10 +134,28 @@ async function run() {
     await page.reload(); await ready(page);
     check(await page.locator('[data-submit]').isDisabled(), 'Unconfigured merchant disables payment');
     check(await page.locator('[data-availability]').isVisible(), 'Availability message is visible');
-    check(await page.locator('#accepted-terms').isDisabled(), 'Unavailable checkout cannot accept terms');
+    check(await page.locator('#accepted-terms').isEnabled(), 'Available legal URLs allow consent even when payment is disabled');
+    await page.locator('#accepted-terms').check();
+    check(await page.locator('#accepted-terms').isChecked(), 'The customer can click consent while payment is disabled');
+    await fill(page);
+    check(await page.locator('[data-submit]').isDisabled(), 'Consent and confirmed delivery cannot enable a backend-disabled payment');
+    equal(await page.locator('[data-submit-label]').textContent(), 'Оплата через СБП недоступна', 'A backend-disabled payment has a clear button label');
+    await page.locator('[data-checkout-form]').evaluate(form => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+    await delay(100);
+    equal(fixture.created.length, 0, 'Even a submitted complete form sends no order POST when payment is disabled');
+
+    fixture.enabled = true;
+    for (const field of ['termsUrl', 'privacyUrl']) {
+      const savedUrl = fixture.legal[field]; fixture.legal[field] = null;
+      await page.reload(); await ready(page);
+      check(await page.locator('#accepted-terms').isDisabled(), `Missing ${field} keeps consent disabled`);
+      check(await page.locator('[data-submit]').isDisabled(), `Missing ${field} keeps payment disabled`);
+      fixture.legal[field] = savedUrl;
+    }
 
     fixture.enabled = true;
     await page.reload(); await ready(page);
+    check(await page.locator('#accepted-terms').isEnabled(), 'Enabled checkout with valid legal URLs retains normal consent');
     const cityInput = page.locator('#delivery-city');
     const suggestions = page.locator('[data-city-suggestions]');
     const beforeShortQuery = fixture.cityRequests.length;

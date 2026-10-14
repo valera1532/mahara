@@ -115,7 +115,7 @@
     const policy = document.createElement('a');
     policy.href = privacy || '/privacy.html'; policy.target = '_blank'; policy.rel = 'noopener noreferrer'; policy.textContent = 'Политика обработки персональных данных';
     privacyCopy.append(policy, '.');
-    $('#accepted-terms').disabled = !available;
+    $('#accepted-terms').disabled = !(terms && privacy);
     const notice = $('[data-availability]');
     notice.hidden = Boolean(available);
     notice.textContent = !available && typeof config?.message === 'string' && config.message.trim() ? config.message : 'Оформление заказа временно недоступно. Пожалуйста, попробуйте позже.';
@@ -146,7 +146,7 @@
 
   function updateSubmit() {
     $('[data-submit]').disabled = state.busy || Boolean(state.pending) || !state.available || !state.quote || !$('#accepted-terms').checked || (state.config?.delivery?.mode === 'cdek_receiver' && !shippingValid());
-    $('[data-submit-label]').textContent = state.busy ? 'Создаём заказ…' : state.quote ? `Оплатить ${money(state.quote.totalAmount)} через СБП` : 'Оплатить через СБП';
+    $('[data-submit-label]').textContent = state.busy ? 'Создаём заказ…' : !state.pending && state.config?.enabled === false ? 'Оплата через СБП недоступна' : state.quote ? `Оплатить ${money(state.quote.totalAmount)} через СБП` : 'Оплатить через СБП';
     $('[data-checkout-form]').setAttribute('aria-busy', String(state.busy));
   }
 

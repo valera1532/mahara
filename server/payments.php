@@ -120,7 +120,7 @@ function mahara_payments_public_config(): array {
     return ['enabled' => $enabled, 'currency' => 'RUB',
         'delivery' => ['mode' => $mode, 'label' => is_string($config['delivery_label']) && $config['delivery_label'] !== '' ? $config['delivery_label'] : ($mode === 'cdek_receiver' ? 'СДЭК — доставка оплачивается при получении отдельно' : 'Доставка'), 'amount' => $amount],
         'legal' => ['termsUrl' => $terms, 'privacyUrl' => $privacy],
-        'message' => $enabled ? '' : 'Онлайн-оплата пока не подключена. Уточните заказ у магазина.'];
+        'message' => $enabled ? '' : 'Оплата через СБП временно недоступна. Оформление заказа пока отключено.'];
 }
 
 function mahara_payments_schema(): void {
