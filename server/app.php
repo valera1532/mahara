@@ -340,6 +340,11 @@ function mahara_dispatch(): never {
             require_once __DIR__ . '/payment-setup.php';
             mahara_payment_setup_dispatch($method);
         }
+        if ($path === '/admin/shipping-setup') {
+            define('MAHARA_SHIPPING_SETUP_INTERNAL', true);
+            require_once __DIR__ . '/shipping-setup.php';
+            mahara_shipping_setup_dispatch($method);
+        }
         if (str_starts_with($path, '/api/')) mahara_api($path, $method);
         if (!in_array($method, ['GET', 'HEAD'], true)) throw new MaharaHttpError(405, 'Метод не поддерживается.');
         $root = mahara_config()['root'];
