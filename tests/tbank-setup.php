@@ -72,6 +72,45 @@ try {
         $result = mahara_tbank_setup_check($credentials, static fn($url, $payload, $policy) => tbank_fixture_response($payload, $changes));
         tbank_check($result['credentialDiagnostics'] === 'unknown', 'Errors, mismatches and unexpected order data never imply accepted credentials.');
     }
+    $controlledRequests = []; $controlledPolicies = [];
+    $controlTransport = static function ($url, $payload, $policy) use (&$controlledRequests, &$controlledPolicies): array {
+        $controlledRequests[] = $payload; $controlledPolicies[] = $policy;
+        tbank_check($url === MAHARA_TBANK_SETUP_URL, 'Signature comparison never changes the read-only endpoint.');
+        return tbank_fixture_response($payload, ['Success' => false, 'ErrorCode' => count($controlledRequests) === 1 ? '335' : '204']);
+    };
+    $controlled = mahara_tbank_setup_check($credentials, $controlTransport, true);
+    tbank_check(count($controlledRequests) === 2 && $controlledRequests[0]['OrderId'] === $controlledRequests[1]['OrderId'] && $controlledRequests[0]['TerminalKey'] === $controlledRequests[1]['TerminalKey'], 'Explicit negative control makes exactly one additional request with the same key and probe.');
+    tbank_check(preg_match('/^[a-f0-9]{64}$/D', $controlledRequests[1]['Token']) === 1 && $controlledRequests[0]['Token'] !== $controlledRequests[1]['Token'] && substr($controlledRequests[0]['Token'], 1) === substr($controlledRequests[1]['Token'], 1), 'The invalid control token is guaranteed to differ by one hex nibble.');
+    tbank_check($controlledPolicies[0] === $controlledPolicies[1] && $controlledPolicies[1]['verifyPeer'] && $controlledPolicies[1]['verifyHost'] === 2, 'Both comparison requests use identical verified TLS policy.');
+    tbank_check($controlled['credentialDiagnostics'] === 'accepted_by_signature_control' && $controlled['signatureControl'] === ['attempted' => true, 'normalErrorCode' => '335', 'invalidTokenErrorCode' => '204'], 'Only the documented contrasting errors yield signature-control evidence.');
+    foreach ([$credentials['terminal_key'], $credentials['password'], $controlledRequests[0]['OrderId'], $controlledRequests[0]['Token'], $controlledRequests[1]['Token']] as $privateValue) tbank_check(!str_contains(json_encode($controlled), $privateValue), 'Comparison evidence contains no raw credential, token or probe.');
+    $defaultCalls = 0;
+    $default335 = mahara_tbank_setup_check($credentials, static function ($url, $payload) use (&$defaultCalls): array { $defaultCalls++; return tbank_fixture_response($payload, ['Success' => false, 'ErrorCode' => '335']); });
+    tbank_check($defaultCalls === 1 && $default335['credentialDiagnostics'] === 'unknown' && !isset($default335['signatureControl']), 'Default 335 remains inconclusive and never sends a bad token.');
+    $successCalls = 0;
+    $normalSuccess = mahara_tbank_setup_check($credentials, static function ($url, $payload) use (&$successCalls): array { $successCalls++; return tbank_fixture_response($payload); }, true);
+    tbank_check($successCalls === 1 && $normalSuccess['credentialDiagnostics'] === 'accepted' && !$normalSuccess['signatureControl']['attempted'], 'A strict normal success needs no negative request.');
+    foreach ([['Success' => false, 'ErrorCode' => '204'], ['Success' => 'false', 'ErrorCode' => '335'], ['Success' => false, 'ErrorCode' => '335', 'TerminalKey' => 'Different'], ['Success' => false, 'ErrorCode' => '335', 'OrderId' => 'Different'], ['Success' => false, 'ErrorCode' => '335', 'Payments' => [['unexpected' => true]]]] as $changes) {
+        $attempts = 0;
+        $uncontrolled = mahara_tbank_setup_check($credentials, static function ($url, $payload) use (&$attempts, $changes): array { $attempts++; return tbank_fixture_response($payload, $changes); }, true);
+        tbank_check($attempts === 1 && $uncontrolled['credentialDiagnostics'] === 'unknown' && !$uncontrolled['signatureControl']['attempted'], 'Only strict matching absent-order errors permit a control request.');
+    }
+    foreach ([['Success' => false, 'ErrorCode' => '335'], ['Success' => true, 'ErrorCode' => '204'], ['Success' => 'false', 'ErrorCode' => '204'], ['Success' => false, 'ErrorCode' => '204', 'TerminalKey' => 'Different'], ['Success' => false, 'ErrorCode' => '204', 'OrderId' => 'Different'], ['Success' => false, 'ErrorCode' => '204', 'Payments' => [['unexpected' => true]]]] as $changes) {
+        $attempts = 0;
+        $inconclusive = mahara_tbank_setup_check($credentials, static function ($url, $payload) use (&$attempts, $changes): array { $attempts++; return tbank_fixture_response($payload, $attempts === 1 ? ['Success' => false, 'ErrorCode' => '335'] : $changes); }, true);
+        tbank_check($attempts === 2 && $inconclusive['credentialDiagnostics'] === 'unknown', 'Same errors, bad echoes or malformed control status never prove credentials.');
+    }
+    foreach ([['httpStatus' => 302, 'tlsVerified' => true, 'body' => '{}'], ['httpStatus' => 200, 'tlsVerified' => false, 'body' => '{}'], ['httpStatus' => 200, 'tlsVerified' => true, 'body' => 'not-json'], ['httpStatus' => 200, 'tlsVerified' => true, 'body' => str_repeat('x', 65537)]] as $response) {
+        $attempts = 0;
+        $failedControl = mahara_tbank_setup_check($credentials, static function ($url, $payload) use (&$attempts, $response): array { $attempts++; return $attempts === 1 ? tbank_fixture_response($payload, ['Success' => false, 'ErrorCode' => '335']) : $response; }, true);
+        tbank_check($attempts === 2 && $failedControl['credentialDiagnostics'] === 'unknown' && !$failedControl['tlsVerified'] && isset($failedControl['signatureControl']['failureCode']), 'Unverified, redirected or malformed controls fail closed without a third request.');
+    }
+    $attempts = 0;
+    $failedControl = mahara_tbank_setup_check($credentials, static function ($url, $payload) use (&$attempts, $credentials): array { $attempts++; if ($attempts === 2) throw new RuntimeException($credentials['password']); return tbank_fixture_response($payload, ['Success' => false, 'ErrorCode' => '335']); }, true);
+    tbank_check($attempts === 2 && $failedControl['credentialDiagnostics'] === 'unknown' && $failedControl['signatureControl']['failureCode'] === 'unexpected_failure' && !str_contains(json_encode($failedControl), $credentials['password']), 'Unexpected control errors stay unknown and never expose raw messages.');
+    $attempts = 0;
+    $minimalErrors = mahara_tbank_setup_check($credentials, static function () use (&$attempts): array { $attempts++; return ['httpStatus' => 200, 'tlsVerified' => true, 'body' => json_encode(['Success' => false, 'ErrorCode' => $attempts === 1 ? 335 : 204])]; }, true);
+    tbank_check($attempts === 2 && $minimalErrors['credentialDiagnostics'] === 'accepted_by_signature_control', 'Error responses may omit echoes; present echoes are checked strictly.');
     foreach ([['httpStatus' => 302, 'tlsVerified' => true, 'body' => '{}'], ['httpStatus' => 200, 'tlsVerified' => false, 'body' => '{}'], ['httpStatus' => 200, 'tlsVerified' => true, 'body' => str_repeat('x', 65537)], ['httpStatus' => 200, 'tlsVerified' => true, 'body' => 'not-json']] as $response) {
         tbank_reject(static fn() => mahara_tbank_setup_check($credentials, static fn() => $response), 'Unverified, redirected, oversized or malformed responses fail closed.');
     }
@@ -87,6 +126,9 @@ try {
     tbank_check(!str_contains($output . $error, 'other-fixture-secret') && !str_contains($output . $error, 'other-terminal'), 'Save errors contain neither secret nor terminal key.');
     [$status, $output] = tbank_cli(['check-terminal', '--saved'], '', $transport);
     tbank_check($status === 0 && json_decode($output, true)['credentialDiagnostics'] === 'accepted', 'Explicit --saved diagnoses newly saved credentials without an extra password prompt.');
+    $controlledRequests = []; $controlledPolicies = [];
+    [$status, $output, $error] = tbank_cli(['check-terminal', '--saved', '--negative-control'], '', $controlTransport);
+    tbank_check($status === 0 && $error === '' && count($controlledRequests) === 2 && json_decode($output, true)['credentialDiagnostics'] === 'accepted_by_signature_control' && hash_file('sha256', $path) === $savedHash, 'Explicit CLI flag runs one signature comparison without changing saved credentials.');
     // Default stdin check cannot execute/read the saved PHP credential file.
     file_put_contents($path, '<?php throw new RuntimeException("saved-file-read-forbidden");');
     [$status, $output] = tbank_cli(['check-terminal', '--stdin'], $input, $transport);
@@ -99,7 +141,7 @@ try {
     tbank_check(json_decode($error, true)['code'] === 'unexpected_failure', 'Unknown exceptions map only to the generic enum.');
     [$status, $output] = tbank_cli(['check-terminal', '--stdin'], $input, static fn($url, $payload) => tbank_fixture_response($payload, ['Success' => false, 'ErrorCode' => '335', 'Message' => $credentials['password'], 'Details' => $credentials['terminal_key']]));
     tbank_check($status === 3 && json_decode($output, true)['credentialDiagnostics'] === 'unknown' && !str_contains($output, $credentials['password']) && !str_contains($output, $credentials['terminal_key']), 'Unknown-order errors remain inconclusive with sanitized numeric code only.');
-    foreach ([['check-terminal', '--stdin', '--saved'], ['save-terminal', '--saved'], ['check-terminal', '--password', $credentials['password']], ['check-terminal', '--stdin', '--stdin']] as $args) {
+    foreach ([['check-terminal', '--stdin', '--saved'], ['save-terminal', '--saved'], ['save-terminal', '--negative-control'], ['check-terminal', '--password', $credentials['password']], ['check-terminal', '--stdin', '--stdin'], ['check-terminal', '--negative-control', '--negative-control']] as $args) {
         [$status, $output, $error] = tbank_cli($args, $input, $transport);
         tbank_check($status === 2 && !str_contains($output . $error, $credentials['password']), 'Conflicting, repeated or secret-bearing arguments are rejected without echo.');
     }

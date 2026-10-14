@@ -188,7 +188,27 @@ function mahara_tbank_setup_transport(string $url, array $payload, array $policy
     } finally { curl_close($handle); }
 }
 
-function mahara_tbank_setup_check(array $credentials, ?callable $transport = null): array {
+function mahara_tbank_setup_reply(array $response, int $maxBytes): array {
+    if (($response['tlsVerified'] ?? false) !== true || ($response['httpStatus'] ?? 0) !== 200 || !is_string($response['body'] ?? null) || strlen($response['body']) > $maxBytes) mahara_tbank_setup_fail(MaharaTbankSetupCode::ResponseUnverified);
+    try { $reply = json_decode($response['body'], true, 32, JSON_THROW_ON_ERROR); }
+    catch (JsonException) { mahara_tbank_setup_fail(MaharaTbankSetupCode::ResponseMalformed); }
+    if (!is_array($reply) || array_is_list($reply)) mahara_tbank_setup_fail(MaharaTbankSetupCode::ResponseMalformed);
+    return $reply;
+}
+
+function mahara_tbank_setup_reply_code(array $reply): ?string {
+    $code = $reply['ErrorCode'] ?? null;
+    return (is_int($code) || is_string($code)) && preg_match('/^[0-9]{1,10}$/D', (string)$code) ? (string)$code : null;
+}
+
+function mahara_tbank_setup_error_matches(array $reply, string $code, array $payload): bool {
+    return ($reply['Success'] ?? null) === false && mahara_tbank_setup_reply_code($reply) === $code
+        && (!array_key_exists('TerminalKey', $reply) || (is_string($reply['TerminalKey']) && hash_equals($payload['TerminalKey'], $reply['TerminalKey'])))
+        && (!array_key_exists('OrderId', $reply) || $reply['OrderId'] === $payload['OrderId'])
+        && (!array_key_exists('Payments', $reply) || $reply['Payments'] === []);
+}
+
+function mahara_tbank_setup_check(array $credentials, ?callable $transport = null, bool $negativeControl = false): array {
     $credentials = mahara_tbank_setup_credentials($credentials['terminal_key'] ?? null, $credentials['password'] ?? null);
     $probe = 'mahara-probe-' . bin2hex(random_bytes(16)); // 45 chars, no existing order data.
     $payload = ['TerminalKey' => $credentials['terminal_key'], 'OrderId' => $probe];
@@ -202,35 +222,51 @@ function mahara_tbank_setup_check(array $credentials, ?callable $transport = nul
     fclose($caHandle);
     $policy = ['caFile' => $caFile, 'verifyPeer' => true, 'verifyHost' => 2, 'tlsMinimum' => '1.2', 'followRedirects' => false,
         'connectTimeout' => 5, 'timeout' => 10, 'maxBytes' => 65536];
-    $response = ($transport ?? 'mahara_tbank_setup_transport')(MAHARA_TBANK_SETUP_URL, $payload, $policy);
-    if (($response['tlsVerified'] ?? false) !== true || ($response['httpStatus'] ?? 0) !== 200 || !is_string($response['body'] ?? null) || strlen($response['body']) > $policy['maxBytes']) mahara_tbank_setup_fail(MaharaTbankSetupCode::ResponseUnverified);
-    try { $reply = json_decode($response['body'], true, 32, JSON_THROW_ON_ERROR); }
-    catch (JsonException) { mahara_tbank_setup_fail(MaharaTbankSetupCode::ResponseMalformed); }
-    if (!is_array($reply) || array_is_list($reply)) mahara_tbank_setup_fail(MaharaTbankSetupCode::ResponseMalformed);
-    $code = $reply['ErrorCode'] ?? null;
-    $numericCode = (is_int($code) || is_string($code)) && preg_match('/^[0-9]{1,10}$/D', (string)$code) ? (string)$code : null;
+    $call = $transport ?? 'mahara_tbank_setup_transport';
+    $reply = mahara_tbank_setup_reply($call(MAHARA_TBANK_SETUP_URL, $payload, $policy), $policy['maxBytes']);
+    $numericCode = mahara_tbank_setup_reply_code($reply);
     $accepted = ($reply['Success'] ?? null) === true && $numericCode === '0'
         && is_string($reply['TerminalKey'] ?? null) && hash_equals($credentials['terminal_key'], $reply['TerminalKey'])
         && ($reply['OrderId'] ?? null) === $probe && ($reply['Payments'] ?? null) === [];
     // Not-found/error responses do not prove that authentication was checked.
     // Never echo bank Message/Details, request fields or payment/customer data.
-    return ['tlsVerified' => true, 'credentialDiagnostics' => $accepted ? 'accepted' : 'unknown',
+    $result = ['tlsVerified' => true, 'credentialDiagnostics' => $accepted ? 'accepted' : 'unknown',
         'errorCode' => $numericCode, 'checkoutChanged' => false, 'createdPayments' => 0];
+    if (!$negativeControl) return $result;
+    $result['signatureControl'] = ['attempted' => false, 'normalErrorCode' => $numericCode, 'invalidTokenErrorCode' => null];
+    if ($accepted || !mahara_tbank_setup_error_matches($reply, '335', $payload)) return $result;
+    // Explicit opt-in only: exactly one negative request on the SAME absent
+    // OrderId/key. Flip a hex nibble, guaranteeing a different 64-character
+    // token without reading another password or creating an order/payment.
+    $invalid = $payload;
+    $invalid['Token'] = ($payload['Token'][0] === '0' ? '1' : '0') . substr($payload['Token'], 1);
+    $result['signatureControl']['attempted'] = true;
+    try {
+        $control = mahara_tbank_setup_reply($call(MAHARA_TBANK_SETUP_URL, $invalid, $policy), $policy['maxBytes']);
+        $result['signatureControl']['invalidTokenErrorCode'] = mahara_tbank_setup_reply_code($control);
+        if (mahara_tbank_setup_error_matches($control, '204', $payload)) $result['credentialDiagnostics'] = 'accepted_by_signature_control';
+    } catch (Throwable $failure) {
+        // A failed control is inconclusive; never promote the original 335 or
+        // expose provider messages, request tokens, keys, password or probe id.
+        $result['tlsVerified'] = false;
+        $result['signatureControl']['failureCode'] = ($failure instanceof MaharaTbankSetupFailure ? $failure->reason : MaharaTbankSetupCode::Unexpected)->value;
+    }
+    return $result;
 }
 
 function mahara_tbank_setup_cli(array $arguments, $input, $output, $error, ?callable $transport = null): int {
-    $usage = "Usage: php tools/tbank.php save-terminal [--stdin] [--replace]\n       php tools/tbank.php check-terminal [--stdin | --saved]\n--stdin: two lines from a private pipe, TerminalKey then NEW terminal secret. Never place them in command arguments.\n--saved: explicit diagnostic of the NEW credentials just saved by the owner. No checkout settings change.\n";
+    $usage = "Usage: php tools/tbank.php save-terminal [--stdin] [--replace]\n       php tools/tbank.php check-terminal [--stdin | --saved] [--negative-control]\n--stdin: two lines from a private pipe, TerminalKey then NEW terminal secret. Never place them in command arguments.\n--saved: explicit diagnostic of the NEW credentials just saved by the owner. No checkout settings change.\n--negative-control: after error 335, send ONE deliberately invalid token on the same read-only probe to compare bank signatures.\n";
     if ($arguments === ['--help']) { fwrite($output, $usage); return 0; }
     try {
         $command = array_shift($arguments); $flags = array_fill_keys($arguments, true);
         if (!in_array($command, ['save-terminal', 'check-terminal'], true) || count($flags) !== count($arguments)
-            || array_diff($arguments, $command === 'save-terminal' ? ['--stdin', '--replace'] : ['--stdin', '--saved'])
+            || array_diff($arguments, $command === 'save-terminal' ? ['--stdin', '--replace'] : ['--stdin', '--saved', '--negative-control'])
             || (isset($flags['--stdin']) && isset($flags['--saved']))) { fwrite($error, $usage); return 2; }
         $credentials = isset($flags['--saved']) ? mahara_tbank_setup_saved() : mahara_tbank_setup_input(isset($flags['--stdin']), $input);
-        $result = $command === 'save-terminal' ? mahara_tbank_setup_save($credentials, isset($flags['--replace'])) : mahara_tbank_setup_check($credentials, $transport);
+        $result = $command === 'save-terminal' ? mahara_tbank_setup_save($credentials, isset($flags['--replace'])) : mahara_tbank_setup_check($credentials, $transport, isset($flags['--negative-control']));
         unset($credentials);
         fwrite($output, json_encode($result, JSON_THROW_ON_ERROR) . "\n");
-        return $command === 'check-terminal' && $result['credentialDiagnostics'] !== 'accepted' ? 3 : 0;
+        return $command === 'check-terminal' && !in_array($result['credentialDiagnostics'], ['accepted', 'accepted_by_signature_control'], true) ? 3 : 0;
     } catch (Throwable $failure) {
         $code = $failure instanceof MaharaTbankSetupFailure ? $failure->reason : MaharaTbankSetupCode::Unexpected;
         fwrite($error, json_encode(['error' => 'terminal_setup_failed', 'code' => $code->value, 'checkoutChanged' => false], JSON_THROW_ON_ERROR) . "\n");
