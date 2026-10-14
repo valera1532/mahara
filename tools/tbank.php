@@ -1,9 +1,9 @@
 <?php
 declare(strict_types=1);
 
-// CLI only. Neither command enables checkout, opens its database, or creates a
-// payment. Never accept credentials in argv, a URL, or an environment variable.
-if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
+// CLI entry point; an authenticated controller may load the functions as a library.
+// Neither command enables checkout or creates a payment. Never put credentials in argv/URLs/env.
+if (PHP_SAPI !== 'cli' && !(defined('MAHARA_TBANK_SETUP_LIBRARY_ONLY') && MAHARA_TBANK_SETUP_LIBRARY_ONLY === true)) { http_response_code(403); exit; }
 
 // Official EACQ method and signing protocol, checked 2026-10-14:
 // https://developer.tbank.ru/eacq/api/check-order

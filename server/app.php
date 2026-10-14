@@ -335,6 +335,11 @@ function mahara_dispatch(): never {
         $path = rawurldecode($raw);
         if ($path === '/index.php') $path = '/';
         if (str_contains($path, "\0") || str_contains($path, '\\') || preg_match('~(?:^|/)\.{1,2}(?:/|$)~', $path) || str_contains($path, '//')) throw new MaharaHttpError(404, 'Страница не найдена.');
+        if ($path === '/admin/payment-setup') {
+            define('MAHARA_PAYMENT_SETUP_INTERNAL', true);
+            require_once __DIR__ . '/payment-setup.php';
+            mahara_payment_setup_dispatch($method);
+        }
         if (str_starts_with($path, '/api/')) mahara_api($path, $method);
         if (!in_array($method, ['GET', 'HEAD'], true)) throw new MaharaHttpError(405, 'Метод не поддерживается.');
         $root = mahara_config()['root'];

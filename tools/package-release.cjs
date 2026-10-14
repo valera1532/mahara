@@ -20,6 +20,7 @@ for (const file of fs.readdirSync(path.join(root, 'server'))) {
 for (const file of fs.readdirSync(root).filter(file => file.endsWith('.html'))) {
   fs.copyFileSync(path.join(root, file), path.join(site, 'server', 'templates', `${file}.php`));
 }
+copy('server/templates/admin-payment-setup.php');
 for (const directory of ['images','icons']) {
   for (const file of fs.readdirSync(path.join(root,'assets',directory))) {
     if (/\.(?:webp|png|jpe?g|svg|ico)$/i.test(file)) copy(`assets/${directory}/${file}`);
