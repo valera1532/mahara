@@ -12,6 +12,11 @@ $GLOBALS['tbank_setup_config'] = ['root' => $base . '/public', 'data_dir' => $ba
 $checks = 0;
 function tbank_check(bool $condition, string $message): void { global $checks; $checks++; if (!$condition) throw new RuntimeException($message); }
 function tbank_reject(callable $operation, string $message): void { try { $operation(); } catch (Throwable) { tbank_check(true, $message); return; } throw new RuntimeException($message); }
+function tbank_reason(callable $operation, MaharaTbankSetupCode $expected, string $message): void {
+    try { $operation(); }
+    catch (MaharaTbankSetupFailure $failure) { tbank_check($failure->reason === $expected, $message); return; }
+    throw new RuntimeException($message);
+}
 function tbank_fixture_response(array $payload, array $changes = []): array {
     return ['httpStatus' => 200, 'tlsVerified' => true, 'body' => json_encode(array_merge(['TerminalKey' => $payload['TerminalKey'], 'OrderId' => $payload['OrderId'], 'Success' => true, 'ErrorCode' => '0', 'Payments' => []], $changes), JSON_THROW_ON_ERROR)];
 }
@@ -30,6 +35,25 @@ function tbank_cleanup(string $path, string $base): void {
 }
 $credentials = ['terminal_key' => 'FixtureTerminal', 'password' => 'fixture-not-a-real-bank-secret'];
 try {
+    foreach ([['', 'fixture', MaharaTbankSetupCode::KeyEmpty], ["bad key", 'fixture', MaharaTbankSetupCode::KeyInvalid],
+        ['key', '', MaharaTbankSetupCode::PasswordEmpty], ['key', "\033[200~fixture\033[201~", MaharaTbankSetupCode::PasswordControls],
+        ['key', "fixture\rsecret", MaharaTbankSetupCode::PasswordControls], ['key', "\xff", MaharaTbankSetupCode::PasswordInvalid],
+        ['key', str_repeat('x', 1025), MaharaTbankSetupCode::PasswordInvalid]] as [$key, $password, $reason]) {
+        tbank_reason(static fn() => mahara_tbank_setup_credentials($key, $password), $reason, 'Input failures expose only the matching safe enum.');
+    }
+    foreach ([['', MaharaTbankSetupCode::KeyEmpty], ['bad key', MaharaTbankSetupCode::KeyInvalid]] as [$key, $reason]) {
+        tbank_reason(static fn() => mahara_tbank_setup_key($key), $reason, 'Interactive key validation can fail before requesting a secret.');
+    }
+    $emptyInput = fopen('php://temp', 'w+b');
+    tbank_reason(static fn() => mahara_tbank_setup_line($emptyInput, true), MaharaTbankSetupCode::HiddenReadIncomplete, 'Hidden EOF is distinct from an empty completed password.');
+    tbank_reason(static fn() => mahara_tbank_setup_line($emptyInput), MaharaTbankSetupCode::ReadIncomplete, 'Ordinary input EOF has its own safe enum.');
+    fclose($emptyInput);
+    tbank_check(mahara_tbank_setup_credentials('key', ' fixture ')['password'] === ' fixture ', 'Password bytes are preserved without trimming or paste rewriting.');
+    [$status, $output, $error] = tbank_cli(['save-terminal', '--stdin'], "key\n\n");
+    tbank_check($status === 1 && $output === '' && json_decode($error, true) === ['error' => 'terminal_setup_failed', 'code' => 'terminal_password_empty', 'checkoutChanged' => false], 'CLI emits only static error fields for an empty completed password.');
+    [$status, $output, $error] = tbank_cli(['save-terminal', '--stdin'], "key\n\033[200~fixture\033[201~\n");
+    tbank_check($status === 1 && json_decode($error, true)['code'] === 'terminal_password_control_chars' && !str_contains($error, 'fixture'), 'Bracketed paste controls are diagnosed without echoing or changing input.');
+    tbank_check(!is_file($base . '/private/.tbank-setup.lock'), 'Invalid human input does not reach the storage lock.');
     $captured = [];
     $transport = static function (string $url, array $payload, array $policy) use ($credentials, &$captured): array {
         $captured[] = $payload;
@@ -59,6 +83,7 @@ try {
     $savedHash = hash_file('sha256', $path);
     [$status, $output, $error] = tbank_cli(['save-terminal', '--stdin'], "other-terminal\nother-fixture-secret\n");
     tbank_check($status === 1 && hash_file('sha256', $path) === $savedHash, 'Default save never overwrites an existing secret.');
+    tbank_check(json_decode($error, true)['code'] === 'storage_exists_or_unsafe', 'Existing-file errors have a static storage enum.');
     tbank_check(!str_contains($output . $error, 'other-fixture-secret') && !str_contains($output . $error, 'other-terminal'), 'Save errors contain neither secret nor terminal key.');
     [$status, $output] = tbank_cli(['check-terminal', '--saved'], '', $transport);
     tbank_check($status === 0 && json_decode($output, true)['credentialDiagnostics'] === 'accepted', 'Explicit --saved diagnoses newly saved credentials without an extra password prompt.');
@@ -68,8 +93,10 @@ try {
     tbank_check($status === 0, 'Fresh input check never loads the existing credential file.');
     [$status, $output, $error] = tbank_cli(['check-terminal', '--saved'], '', $transport);
     tbank_check($status === 1 && !str_contains($error . $output, 'saved-file-read-forbidden'), 'Saved-file failures are sanitized.');
+    tbank_check(json_decode($error, true)['code'] === 'saved_storage_invalid', 'Saved-file errors never expose their raw exception.');
     [$status, $output, $error] = tbank_cli(['check-terminal', '--stdin'], $input, static fn() => throw new RuntimeException('fixture-not-a-real-bank-secret'));
     tbank_check($status === 1 && !str_contains($error . $output, $credentials['password']), 'Transport exceptions cannot leak credentials.');
+    tbank_check(json_decode($error, true)['code'] === 'unexpected_failure', 'Unknown exceptions map only to the generic enum.');
     [$status, $output] = tbank_cli(['check-terminal', '--stdin'], $input, static fn($url, $payload) => tbank_fixture_response($payload, ['Success' => false, 'ErrorCode' => '335', 'Message' => $credentials['password'], 'Details' => $credentials['terminal_key']]));
     tbank_check($status === 3 && json_decode($output, true)['credentialDiagnostics'] === 'unknown' && !str_contains($output, $credentials['password']) && !str_contains($output, $credentials['terminal_key']), 'Unknown-order errors remain inconclusive with sanitized numeric code only.');
     foreach ([['check-terminal', '--stdin', '--saved'], ['save-terminal', '--saved'], ['check-terminal', '--password', $credentials['password']], ['check-terminal', '--stdin', '--stdin']] as $args) {

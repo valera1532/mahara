@@ -10,9 +10,57 @@ if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 // https://developer.tbank.ru/eacq/intro/developer/token
 const MAHARA_TBANK_SETUP_URL = 'https://securepay.tinkoff.ru/v2/CheckOrder';
 
+enum MaharaTbankSetupCode: string {
+    case KeyEmpty = 'terminal_key_empty';
+    case KeyInvalid = 'terminal_key_invalid';
+    case PasswordEmpty = 'terminal_password_empty';
+    case PasswordControls = 'terminal_password_control_chars';
+    case PasswordInvalid = 'terminal_password_invalid';
+    case ReadIncomplete = 'input_read_incomplete';
+    case HiddenReadIncomplete = 'hidden_read_incomplete';
+    case NotInteractive = 'input_not_interactive';
+    case PipeRequired = 'private_pipe_required';
+    case HiddenUnavailable = 'hidden_input_unavailable';
+    case EchoFailed = 'hidden_echo_failed';
+    case PathOverride = 'private_path_override';
+    case PathInvalid = 'private_path_invalid';
+    case PathMissing = 'private_path_missing';
+    case PathPublic = 'private_path_public';
+    case StorageExists = 'storage_exists_or_unsafe';
+    case LockUnsafe = 'storage_lock_unsafe';
+    case LockFailed = 'storage_lock_failed';
+    case CreateFailed = 'storage_create_failed';
+    case WriteFailed = 'storage_write_failed';
+    case PublishFailed = 'storage_publish_failed';
+    case SavedUnavailable = 'saved_storage_unavailable';
+    case SavedInvalid = 'saved_storage_invalid';
+    case CurlUnavailable = 'diagnostic_curl_unavailable';
+    case InitFailed = 'diagnostic_init_failed';
+    case TLSFailed = 'diagnostic_tls_or_request_failed';
+    case ResponseUnverified = 'diagnostic_response_unverified';
+    case ResponseMalformed = 'diagnostic_response_malformed';
+    case CAMissing = 'diagnostic_ca_missing';
+    case Unexpected = 'unexpected_failure';
+}
+
+final class MaharaTbankSetupFailure extends RuntimeException {
+    public function __construct(public readonly MaharaTbankSetupCode $reason) { parent::__construct('Terminal setup failed.'); }
+}
+
+function mahara_tbank_setup_fail(MaharaTbankSetupCode $reason): never { throw new MaharaTbankSetupFailure($reason); }
+
+function mahara_tbank_setup_key(mixed $key): string {
+    if ($key === '') mahara_tbank_setup_fail(MaharaTbankSetupCode::KeyEmpty);
+    if (!is_string($key) || strlen($key) > 64 || preg_match('/[\x00-\x20\x7f]/', $key) || !preg_match('//u', $key)) mahara_tbank_setup_fail(MaharaTbankSetupCode::KeyInvalid);
+    return $key;
+}
+
 function mahara_tbank_setup_credentials(mixed $key, mixed $password): array {
-    if (!is_string($key) || $key === '' || strlen($key) > 64 || preg_match('/[\x00-\x20\x7f]/', $key) || !preg_match('//u', $key)) throw new RuntimeException('Invalid terminal key.');
-    if (!is_string($password) || $password === '' || strlen($password) > 1024 || preg_match('/[\x00-\x1f\x7f]/', $password) || !preg_match('//u', $password)) throw new RuntimeException('Invalid terminal password.');
+    $key = mahara_tbank_setup_key($key);
+    if ($password === '') mahara_tbank_setup_fail(MaharaTbankSetupCode::PasswordEmpty);
+    if (!is_string($password)) mahara_tbank_setup_fail(MaharaTbankSetupCode::PasswordInvalid);
+    if (preg_match('/[\x00-\x1f\x7f]/', $password)) mahara_tbank_setup_fail(MaharaTbankSetupCode::PasswordControls);
+    if (strlen($password) > 1024 || !preg_match('//u', $password)) mahara_tbank_setup_fail(MaharaTbankSetupCode::PasswordInvalid);
     return ['terminal_key' => $key, 'password' => $password];
 }
 
@@ -20,40 +68,40 @@ function mahara_tbank_setup_private_directory(): string {
     $config = mahara_config();
     // Do not accidentally save/check a different terminal from the application's
     // environment override. This CLI deliberately manages only the standard file.
-    if ((getenv('MAHARA_TBANK_SECRETS') ?: '') !== '') throw new RuntimeException('Nonstandard terminal storage configured.');
+    if ((getenv('MAHARA_TBANK_SECRETS') ?: '') !== '') mahara_tbank_setup_fail(MaharaTbankSetupCode::PathOverride);
     $directory = $config['data_dir'] ?? null;
-    if (!is_string($directory) || str_contains($directory, "\0") || (!str_starts_with($directory, '/') && !preg_match('~^[A-Za-z]:[\\\\/]~', $directory))) throw new RuntimeException('Private data_dir must be absolute.');
+    if (!is_string($directory) || str_contains($directory, "\0") || (!str_starts_with($directory, '/') && !preg_match('~^[A-Za-z]:[\\\\/]~', $directory))) mahara_tbank_setup_fail(MaharaTbankSetupCode::PathInvalid);
     $base = realpath($directory); $root = realpath($config['root'] ?? '');
-    if (!$base || !$root || !is_dir($base)) throw new RuntimeException('Private directory missing.');
+    if (!$base || !$root || !is_dir($base)) mahara_tbank_setup_fail(MaharaTbankSetupCode::PathMissing);
     $normalized = rtrim(str_replace('\\', '/', $base), '/'); $public = rtrim(str_replace('\\', '/', $root), '/');
     if (PHP_OS_FAMILY === 'Windows') { $normalized = strtolower($normalized); $public = strtolower($public); }
-    if ($normalized === $public || str_starts_with($normalized, $public . '/')) throw new RuntimeException('Terminal storage must stay outside the public site.');
+    if ($normalized === $public || str_starts_with($normalized, $public . '/')) mahara_tbank_setup_fail(MaharaTbankSetupCode::PathPublic);
     return $base;
 }
 
 function mahara_tbank_setup_save(array $credentials, bool $replace = false): array {
     $credentials = mahara_tbank_setup_credentials($credentials['terminal_key'] ?? null, $credentials['password'] ?? null);
     $base = mahara_tbank_setup_private_directory(); $target = $base . '/tbank-secrets.php';
-    if (is_link($target) || (file_exists($target) && (!is_file($target) || !$replace))) throw new RuntimeException('Terminal storage exists or is unsafe.');
+    if (is_link($target) || (file_exists($target) && (!is_file($target) || !$replace))) mahara_tbank_setup_fail(MaharaTbankSetupCode::StorageExists);
     $temporary = $base . '/.tbank-secrets-' . bin2hex(random_bytes(12)) . '.tmp';
     $lockPath = $base . '/.tbank-setup.lock';
-    if (is_link($lockPath) || (file_exists($lockPath) && !is_file($lockPath))) throw new RuntimeException('Unsafe terminal setup lock.');
+    if (is_link($lockPath) || (file_exists($lockPath) && !is_file($lockPath))) mahara_tbank_setup_fail(MaharaTbankSetupCode::LockUnsafe);
     $file = null; $lock = null; $mode = umask(0077);
     try {
         $lock = @fopen($lockPath, 'c+b');
-        if ($lock === false || !chmod($lockPath, 0600) || !flock($lock, LOCK_EX)) throw new RuntimeException('Cannot lock private terminal storage.');
-        if (is_link($target) || (file_exists($target) && (!is_file($target) || !$replace))) throw new RuntimeException('Terminal storage exists or is unsafe.');
+        if ($lock === false || !chmod($lockPath, 0600) || !flock($lock, LOCK_EX)) mahara_tbank_setup_fail(MaharaTbankSetupCode::LockFailed);
+        if (is_link($target) || (file_exists($target) && (!is_file($target) || !$replace))) mahara_tbank_setup_fail(MaharaTbankSetupCode::StorageExists);
         $file = @fopen($temporary, 'xb');
-        if ($file === false || !chmod($temporary, 0600)) throw new RuntimeException('Cannot create private terminal storage.');
+        if ($file === false || !chmod($temporary, 0600)) mahara_tbank_setup_fail(MaharaTbankSetupCode::CreateFailed);
         $contents = "<?php\nreturn " . var_export($credentials, true) . ";\n";
-        if (fwrite($file, $contents) !== strlen($contents) || !fflush($file) || (function_exists('fsync') && !fsync($file))) throw new RuntimeException('Cannot save terminal storage.');
+        if (fwrite($file, $contents) !== strlen($contents) || !fflush($file) || (function_exists('fsync') && !fsync($file))) mahara_tbank_setup_fail(MaharaTbankSetupCode::WriteFailed);
         fclose($file); $file = null;
         // A hard link publishes the complete file atomically without overwriting
         // a concurrently created destination. Replace is a separate explicit opt-in.
         // Windows restricted tokens may deny hard links. All CLI writers still
         // serialize through the private lock and recheck the target before rename.
         $published = $replace || PHP_OS_FAMILY === 'Windows' ? @rename($temporary, $target) : @link($temporary, $target);
-        if (!$published) throw new RuntimeException('Cannot publish private terminal storage.');
+        if (!$published) mahara_tbank_setup_fail(MaharaTbankSetupCode::PublishFailed);
         return ['saved' => true, 'checkoutChanged' => false];
     } finally {
         if (is_resource($file)) fclose($file);
@@ -67,60 +115,61 @@ function mahara_tbank_setup_saved(): array {
     // Explicit --saved is used only after the owner supplied a NEW secret through
     // save-terminal. Default checks always ask for fresh input instead.
     $path = mahara_tbank_setup_private_directory() . '/tbank-secrets.php';
-    if (!is_file($path) || is_link($path) || filesize($path) > 8192) throw new RuntimeException('Private terminal storage missing or unsafe.');
+    if (!is_file($path) || is_link($path) || filesize($path) > 8192) mahara_tbank_setup_fail(MaharaTbankSetupCode::SavedUnavailable);
     $level = ob_get_level(); ob_start();
     try { $value = require $path; }
-    catch (Throwable) { throw new RuntimeException('Invalid private terminal storage.'); }
+    catch (Throwable) { mahara_tbank_setup_fail(MaharaTbankSetupCode::SavedInvalid); }
     finally { while (ob_get_level() > $level) ob_end_clean(); }
     return mahara_tbank_setup_credentials($value['terminal_key'] ?? null, $value['password'] ?? null);
 }
 
 function mahara_tbank_setup_hidden(): string {
-    if (!stream_isatty(STDIN)) throw new RuntimeException('Use --stdin for a private pipe.');
+    if (!stream_isatty(STDIN)) mahara_tbank_setup_fail(MaharaTbankSetupCode::NotInteractive);
     if (PHP_OS_FAMILY === 'Windows') {
         $script = '$v = Read-Host "New terminal secret" -AsSecureString; $p = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($v); try { [Console]::Out.Write([Runtime.InteropServices.Marshal]::PtrToStringBSTR($p)) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($p) }';
         $process = proc_open(['powershell.exe', '-NoProfile', '-Command', $script], [0 => STDIN, 1 => ['pipe', 'w'], 2 => STDERR], $pipes);
-        if (!is_resource($process)) throw new RuntimeException('Cannot read hidden input.');
+        if (!is_resource($process)) mahara_tbank_setup_fail(MaharaTbankSetupCode::HiddenUnavailable);
         $password = stream_get_contents($pipes[1], 1025); fclose($pipes[1]);
-        if (proc_close($process) !== 0 || $password === false) throw new RuntimeException('Cannot read hidden input.');
+        if (proc_close($process) !== 0 || $password === false) mahara_tbank_setup_fail(MaharaTbankSetupCode::HiddenReadIncomplete);
         return $password;
     }
-    $terminal = @fopen('/dev/tty', 'rb');
-    if ($terminal === false || !function_exists('shell_exec') || !function_exists('exec')) throw new RuntimeException('Cannot read hidden input.');
+    if (!function_exists('shell_exec') || !function_exists('exec')) mahara_tbank_setup_fail(MaharaTbankSetupCode::HiddenUnavailable);
     $mode = shell_exec('stty -g < /dev/tty');
-    if (!is_string($mode) || trim($mode) === '') { fclose($terminal); throw new RuntimeException('Cannot disable terminal echo.'); }
+    if (!is_string($mode) || trim($mode) === '') mahara_tbank_setup_fail(MaharaTbankSetupCode::EchoFailed);
     exec('stty -echo < /dev/tty', $ignored, $status);
-    if ($status !== 0) { fclose($terminal); throw new RuntimeException('Cannot disable terminal echo.'); }
+    if ($status !== 0) mahara_tbank_setup_fail(MaharaTbankSetupCode::EchoFailed);
     $restored = false;
     $restore = static function () use ($mode, &$restored): void {
         if (!$restored) { shell_exec('stty ' . escapeshellarg(trim($mode)) . ' < /dev/tty'); $restored = true; }
     };
     register_shutdown_function($restore);
     fwrite(STDERR, 'New terminal secret (hidden): ');
-    try { return mahara_tbank_setup_line($terminal); }
-    finally { $restore(); fclose($terminal); fwrite(STDERR, "\r\033[2K" . PHP_EOL); }
+    // Keep the same PHP stream for both prompts: a second /dev/tty stream can
+    // lose input already buffered by the key read on noncanonical terminals.
+    try { return mahara_tbank_setup_line(STDIN, true); }
+    finally { $restore(); fwrite(STDERR, "\r\033[2K" . PHP_EOL); }
 }
 
-function mahara_tbank_setup_line($input): string {
+function mahara_tbank_setup_line($input, bool $hidden = false): string {
     $line = fgets($input, 1026);
-    if ($line === false || strlen($line) > 1025) throw new RuntimeException('Incomplete terminal input.');
+    if ($line === false || strlen($line) > 1025) mahara_tbank_setup_fail($hidden ? MaharaTbankSetupCode::HiddenReadIncomplete : MaharaTbankSetupCode::ReadIncomplete);
     return rtrim($line, "\r\n");
 }
 
 function mahara_tbank_setup_input(bool $stdin, $input): array {
     if ($stdin) {
-        if (stream_isatty($input)) throw new RuntimeException('--stdin requires a private pipe, not an echoed console.');
+        if (stream_isatty($input)) mahara_tbank_setup_fail(MaharaTbankSetupCode::PipeRequired);
         return mahara_tbank_setup_credentials(mahara_tbank_setup_line($input), mahara_tbank_setup_line($input));
     }
-    if (!stream_isatty(STDIN)) throw new RuntimeException('Use --stdin for a private pipe.');
-    fwrite(STDERR, 'TerminalKey: '); $key = mahara_tbank_setup_line(STDIN);
+    if (!stream_isatty(STDIN)) mahara_tbank_setup_fail(MaharaTbankSetupCode::NotInteractive);
+    fwrite(STDERR, 'TerminalKey: '); $key = mahara_tbank_setup_key(mahara_tbank_setup_line(STDIN));
     return mahara_tbank_setup_credentials($key, mahara_tbank_setup_hidden());
 }
 
 function mahara_tbank_setup_transport(string $url, array $payload, array $policy): array {
-    if ($url !== MAHARA_TBANK_SETUP_URL || !function_exists('curl_init')) throw new RuntimeException('HTTPS cURL required for terminal diagnostics.');
+    if ($url !== MAHARA_TBANK_SETUP_URL || !function_exists('curl_init')) mahara_tbank_setup_fail(MaharaTbankSetupCode::CurlUnavailable);
     $body = ''; $handle = curl_init($url);
-    if ($handle === false) throw new RuntimeException('Cannot initialize terminal diagnostics.');
+    if ($handle === false) mahara_tbank_setup_fail(MaharaTbankSetupCode::InitFailed);
     try {
         curl_setopt_array($handle, [CURLOPT_POST => true, CURLOPT_POSTFIELDS => json_encode($payload, JSON_THROW_ON_ERROR),
             CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Accept: application/json'],
@@ -134,7 +183,7 @@ function mahara_tbank_setup_transport(string $url, array $payload, array $policy
             },
         ]);
         $ok = curl_exec($handle); $status = (int)curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
-        if ($ok === false || (int)curl_getinfo($handle, CURLINFO_SSL_VERIFYRESULT) !== 0) throw new RuntimeException('TLS or bank request failed.');
+        if ($ok === false || (int)curl_getinfo($handle, CURLINFO_SSL_VERIFYRESULT) !== 0) mahara_tbank_setup_fail(MaharaTbankSetupCode::TLSFailed);
         return ['httpStatus' => $status, 'body' => $body, 'tlsVerified' => true];
     } finally { curl_close($handle); }
 }
@@ -147,16 +196,17 @@ function mahara_tbank_setup_check(array $credentials, ?callable $transport = nul
     $payload['Token'] = hash('sha256', implode('', $values));
     unset($values);
     $caFile = dirname(__DIR__) . '/server/certs/tbank-ca.pem';
-    if (!is_file($caFile) || is_link($caFile)) throw new RuntimeException('Bank CA bundle missing.');
+    if (!is_file($caFile) || is_link($caFile)) mahara_tbank_setup_fail(MaharaTbankSetupCode::CAMissing);
     $caHandle = @fopen($caFile, 'rb');
-    if ($caHandle === false) throw new RuntimeException('Bank CA bundle missing.');
+    if ($caHandle === false) mahara_tbank_setup_fail(MaharaTbankSetupCode::CAMissing);
     fclose($caHandle);
     $policy = ['caFile' => $caFile, 'verifyPeer' => true, 'verifyHost' => 2, 'tlsMinimum' => '1.2', 'followRedirects' => false,
         'connectTimeout' => 5, 'timeout' => 10, 'maxBytes' => 65536];
     $response = ($transport ?? 'mahara_tbank_setup_transport')(MAHARA_TBANK_SETUP_URL, $payload, $policy);
-    if (($response['tlsVerified'] ?? false) !== true || ($response['httpStatus'] ?? 0) !== 200 || !is_string($response['body'] ?? null) || strlen($response['body']) > $policy['maxBytes']) throw new RuntimeException('Unverified diagnostic response.');
-    $reply = json_decode($response['body'], true, 32, JSON_THROW_ON_ERROR);
-    if (!is_array($reply) || array_is_list($reply)) throw new RuntimeException('Malformed diagnostic response.');
+    if (($response['tlsVerified'] ?? false) !== true || ($response['httpStatus'] ?? 0) !== 200 || !is_string($response['body'] ?? null) || strlen($response['body']) > $policy['maxBytes']) mahara_tbank_setup_fail(MaharaTbankSetupCode::ResponseUnverified);
+    try { $reply = json_decode($response['body'], true, 32, JSON_THROW_ON_ERROR); }
+    catch (JsonException) { mahara_tbank_setup_fail(MaharaTbankSetupCode::ResponseMalformed); }
+    if (!is_array($reply) || array_is_list($reply)) mahara_tbank_setup_fail(MaharaTbankSetupCode::ResponseMalformed);
     $code = $reply['ErrorCode'] ?? null;
     $numericCode = (is_int($code) || is_string($code)) && preg_match('/^[0-9]{1,10}$/D', (string)$code) ? (string)$code : null;
     $accepted = ($reply['Success'] ?? null) === true && $numericCode === '0'
@@ -181,8 +231,9 @@ function mahara_tbank_setup_cli(array $arguments, $input, $output, $error, ?call
         unset($credentials);
         fwrite($output, json_encode($result, JSON_THROW_ON_ERROR) . "\n");
         return $command === 'check-terminal' && $result['credentialDiagnostics'] !== 'accepted' ? 3 : 0;
-    } catch (Throwable) {
-        fwrite($error, "Terminal setup failed. Check input, private storage permissions, existing file and HTTPS/cURL/CA support. No bank response or credentials were printed; checkout settings were not changed.\n");
+    } catch (Throwable $failure) {
+        $code = $failure instanceof MaharaTbankSetupFailure ? $failure->reason : MaharaTbankSetupCode::Unexpected;
+        fwrite($error, json_encode(['error' => 'terminal_setup_failed', 'code' => $code->value, 'checkoutChanged' => false], JSON_THROW_ON_ERROR) . "\n");
         return 1;
     }
 }
