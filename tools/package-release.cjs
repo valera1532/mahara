@@ -27,6 +27,7 @@ for (const directory of ['images','icons']) {
 }
 copy('tools/admin.php');
 copy('tools/commerce.php');
+copy('tools/tbank.php');
 copy('tools/notifications.php');
 copy('tools/backup.php');
 copy('server/certs/tbank-ca.pem');
