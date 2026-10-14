@@ -6,7 +6,7 @@ declare(strict_types=1);
 // shipments or promise that a contract permits collection from the recipient.
 
 function mahara_shipping_config(): array {
-    $config = array_merge(['enabled' => false, 'origin_city_code' => 0, 'tariff_codes' => [], 'packages_by_category' => []], mahara_config()['shipping'] ?? []);
+    $config = array_merge(['enabled' => false, 'estimate_enabled' => true, 'origin_city_code' => 0, 'tariff_codes' => [], 'packages_by_category' => []], mahara_config()['shipping'] ?? []);
     if (defined('MAHARA_LIBRARY_ONLY') && isset($GLOBALS['mahara_shipping_test_config'])) $config = array_merge($config, $GLOBALS['mahara_shipping_test_config']);
     return $config;
 }
@@ -36,16 +36,22 @@ function mahara_shipping_package(mixed $value): ?array {
 
 function mahara_shipping_public_config(): array {
     $config = mahara_shipping_config(); $secrets = mahara_shipping_secrets();
-    $valid = $config['enabled'] === true && is_int($config['origin_city_code']) && $config['origin_city_code'] > 0 && $config['origin_city_code'] <= 999999999
-        && is_array($config['tariff_codes']) && array_is_list($config['tariff_codes']) && count($config['tariff_codes']) > 0 && count($config['tariff_codes']) <= 30
+    $estimate = $config['estimate_enabled'] === true;
+    $valid = $config['enabled'] === true && is_bool($config['estimate_enabled'])
         && $secrets['account'] !== '' && strlen($secrets['account']) <= 200 && $secrets['password'] !== '' && strlen($secrets['password']) <= 500;
-    foreach (is_array($config['tariff_codes']) ? $config['tariff_codes'] : [] as $code) if (!is_int($code) || $code < 1 || $code > 999999) $valid = false;
-    foreach (['hoodie', 'tee'] as $category) if (!mahara_shipping_package($config['packages_by_category'][$category] ?? null)) $valid = false;
-    return ['enabled' => $valid, 'mode' => 'cdek_receiver', 'message' => $valid ? '' : 'Выбор пункта выдачи и расчёт СДЭК пока не подключены.'];
+    if ($estimate) {
+        $valid = $valid && is_int($config['origin_city_code']) && $config['origin_city_code'] > 0 && $config['origin_city_code'] <= 999999999
+            && is_array($config['tariff_codes']) && array_is_list($config['tariff_codes']) && count($config['tariff_codes']) > 0 && count($config['tariff_codes']) <= 30;
+        foreach (is_array($config['tariff_codes']) ? $config['tariff_codes'] : [] as $code) if (!is_int($code) || $code < 1 || $code > 999999) $valid = false;
+        foreach (['hoodie', 'tee'] as $category) if (!mahara_shipping_package($config['packages_by_category'][$category] ?? null)) $valid = false;
+    }
+    return ['enabled' => $valid, 'mode' => 'cdek_receiver', 'estimateEnabled' => $estimate,
+        'message' => $valid ? '' : ($estimate ? 'Выбор пункта выдачи и расчёт СДЭК пока не подключены.' : 'Выбор пунктов выдачи СДЭК пока не подключён.')];
 }
 
 function mahara_shipping_require_enabled(): void {
-    if (!mahara_shipping_public_config()['enabled']) throw new MaharaHttpError(503, 'Выбор пункта выдачи и расчёт СДЭК пока не подключены.');
+    $public = mahara_shipping_public_config();
+    if (!$public['enabled']) throw new MaharaHttpError(503, $public['message']);
 }
 
 function mahara_shipping_schema(): void {
@@ -204,25 +210,34 @@ function mahara_shipping_packages(array $items): array {
 
 function mahara_shipping_settings_hash(array $packages): string {
     $config = mahara_shipping_config(); $secrets = mahara_shipping_secrets();
-    return hash('sha256', json_encode([$config['origin_city_code'], $config['tariff_codes'], $packages, $secrets['account']], JSON_THROW_ON_ERROR));
+    $mode = function_exists('mahara_payments_config') ? mahara_payments_config()['delivery_mode'] : 'cdek_receiver';
+    return hash('sha256', json_encode([2, $mode, $config['estimate_enabled'], $config['origin_city_code'], $config['tariff_codes'],
+        $config['packages_by_category'], $packages, $secrets['account'], $secrets['password']], JSON_THROW_ON_ERROR));
 }
 
 function mahara_shipping_quote(mixed $input): array {
     mahara_shipping_require_enabled(); mahara_object($input, ['items', 'pointCode'], 'Доставка');
     $items = mahara_payments_items($input['items']); $pointCode = mahara_shipping_point_code($input['pointCode']);
-    $packages = mahara_shipping_packages($items); $point = mahara_shipping_verified_point($pointCode); $config = mahara_shipping_config();
-    $reply = mahara_shipping_request('POST', 'calculator/tarifflist', ['type' => 1, 'currency' => 1, 'lang' => 'rus', 'from_location' => ['code' => $config['origin_city_code']], 'to_location' => ['code' => $point['cityCode']], 'packages' => $packages], mahara_shipping_token());
-    if (!is_array($reply['tariff_codes'] ?? null) || !array_is_list($reply['tariff_codes'])) throw new MaharaHttpError(502, 'СДЭК не вернул стоимость доставки.');
-    $options = [];
-    foreach ($reply['tariff_codes'] as $tariff) {
-        if (!is_array($tariff) || !in_array($tariff['tariff_code'] ?? null, $config['tariff_codes'], true) || !in_array($tariff['delivery_mode'] ?? null, [2, 4], true)
-            || (!is_int($tariff['delivery_sum'] ?? null) && !is_float($tariff['delivery_sum'] ?? null)) || !is_finite((float)$tariff['delivery_sum']) || $tariff['delivery_sum'] < 0 || $tariff['delivery_sum'] > 100000
-            || !is_int($tariff['period_min'] ?? null) || !is_int($tariff['period_max'] ?? null) || $tariff['period_min'] < 0 || $tariff['period_max'] < $tariff['period_min'] || $tariff['period_max'] > 365) continue;
-        $options[] = ['amount' => (int)round($tariff['delivery_sum'] * 100), 'tariffCode' => $tariff['tariff_code'], 'periodMin' => $tariff['period_min'], 'periodMax' => $tariff['period_max']];
+    $config = mahara_shipping_config(); $estimate = $config['estimate_enabled'] === true;
+    $packages = $estimate ? mahara_shipping_packages($items) : [];
+    if (!$estimate) foreach ($items as $item) mahara_inventory_product($item['id'], $item['size']);
+    $point = mahara_shipping_verified_point($pointCode);
+    $selection = ['amount' => null, 'tariffCode' => null, 'periodMin' => null, 'periodMax' => null];
+    if ($estimate) {
+        $reply = mahara_shipping_request('POST', 'calculator/tarifflist', ['type' => 1, 'currency' => 1, 'lang' => 'rus', 'from_location' => ['code' => $config['origin_city_code']], 'to_location' => ['code' => $point['cityCode']], 'packages' => $packages], mahara_shipping_token());
+        if (!is_array($reply['tariff_codes'] ?? null) || !array_is_list($reply['tariff_codes'])) throw new MaharaHttpError(502, 'СДЭК не вернул стоимость доставки.');
+        $options = [];
+        foreach ($reply['tariff_codes'] as $tariff) {
+            if (!is_array($tariff) || !in_array($tariff['tariff_code'] ?? null, $config['tariff_codes'], true) || !in_array($tariff['delivery_mode'] ?? null, [2, 4], true)
+                || (!is_int($tariff['delivery_sum'] ?? null) && !is_float($tariff['delivery_sum'] ?? null)) || !is_finite((float)$tariff['delivery_sum']) || $tariff['delivery_sum'] < 0 || $tariff['delivery_sum'] > 100000
+                || !is_int($tariff['period_min'] ?? null) || !is_int($tariff['period_max'] ?? null) || $tariff['period_min'] < 0 || $tariff['period_max'] < $tariff['period_min'] || $tariff['period_max'] > 365) continue;
+            $options[] = ['amount' => (int)round($tariff['delivery_sum'] * 100), 'tariffCode' => $tariff['tariff_code'], 'periodMin' => $tariff['period_min'], 'periodMax' => $tariff['period_max']];
+        }
+        if (!$options) throw new MaharaHttpError(409, 'Для этого пункта нет доступного тарифа по договору магазина. Выберите другой пункт СДЭК.');
+        usort($options, static fn(array $a, array $b): int => [$a['amount'], $a['tariffCode']] <=> [$b['amount'], $b['tariffCode']]);
+        $selection = $options[0];
     }
-    if (!$options) throw new MaharaHttpError(409, 'Для этого пункта нет доступного тарифа по договору магазина. Выберите другой пункт СДЭК.');
-    usort($options, static fn(array $a, array $b): int => [$a['amount'], $a['tariffCode']] <=> [$b['amount'], $b['tariffCode']]);
-    $now = time(); $quote = $options[0] + ['quoteId' => bin2hex(random_bytes(24)), 'currency' => 'RUB', 'point' => $point, 'expiresAt' => gmdate('Y-m-d\TH:i:s\Z', $now + 900)];
+    $now = time(); $quote = $selection + ['quoteId' => bin2hex(random_bytes(24)), 'currency' => 'RUB', 'point' => $point, 'expiresAt' => gmdate('Y-m-d\TH:i:s\Z', $now + 900), 'estimated' => $estimate];
     mahara_shipping_schema();
     mahara_query('DELETE FROM shipping_quotes WHERE expires_at<=?', [$now]);
     mahara_query('DELETE FROM shipping_cache WHERE expires_at<=?', [$now]);
@@ -233,12 +248,19 @@ function mahara_shipping_quote(mixed $input): array {
 // Pure local validation, safe to call while reserving an order under a DB lock.
 function mahara_shipping_validate(mixed $delivery, mixed $items): array {
     mahara_shipping_require_enabled();
-    if (!is_array($delivery) || array_is_list($delivery) || array_diff(array_keys($delivery), ['quoteId', 'city', 'point', 'address']) || !is_string($delivery['quoteId'] ?? null) || !preg_match('/^[a-f0-9]{48}$/D', $delivery['quoteId'])) mahara_fail('Выберите пункт выдачи СДЭК и рассчитайте доставку.');
+    if (!is_array($delivery) || array_is_list($delivery) || array_diff(array_keys($delivery), ['quoteId', 'city', 'point', 'address']) || !is_string($delivery['quoteId'] ?? null) || !preg_match('/^[a-f0-9]{48}$/D', $delivery['quoteId'])) mahara_fail('Выберите пункт выдачи СДЭК и подтвердите его.');
     $items = mahara_payments_items($items); mahara_shipping_schema();
+    $estimate = mahara_shipping_config()['estimate_enabled'] === true;
+    $packages = $estimate ? mahara_shipping_packages($items) : [];
+    if (!$estimate) foreach ($items as $item) mahara_inventory_product($item['id'], $item['size']);
     $row = mahara_query('SELECT * FROM shipping_quotes WHERE id=? AND expires_at>?', [$delivery['quoteId'], time()])->fetch();
-    if (!$row || !hash_equals($row['items_hash'], hash('sha256', json_encode($items, JSON_THROW_ON_ERROR))) || !hash_equals($row['settings_hash'], mahara_shipping_settings_hash(mahara_shipping_packages($items)))) throw new MaharaHttpError(409, 'Расчёт доставки устарел или корзина изменилась. Выберите пункт выдачи повторно.');
+    if (!$row || !hash_equals($row['items_hash'], hash('sha256', json_encode($items, JSON_THROW_ON_ERROR))) || !hash_equals($row['settings_hash'], mahara_shipping_settings_hash($packages))) throw new MaharaHttpError(409, 'Подтверждение пункта устарело или корзина изменилась. Выберите пункт выдачи повторно.');
     $quote = json_decode($row['quote_json'], true, 64, JSON_THROW_ON_ERROR);
-    return ['city' => $quote['point']['city'], 'point' => $quote['point']['code'], 'address' => $quote['point']['address'], 'quoteId' => $quote['quoteId'], 'shippingAmount' => $quote['amount'], 'tariffCode' => $quote['tariffCode'], 'estimated' => true];
+    if (($quote['estimated'] ?? null) !== $estimate) throw new MaharaHttpError(409, 'Подтверждение пункта устарело. Выберите пункт выдачи повторно.');
+    if (!$estimate) foreach (['amount', 'tariffCode', 'periodMin', 'periodMax'] as $field) {
+        if (!array_key_exists($field, $quote) || $quote[$field] !== null) throw new MaharaHttpError(409, 'Подтверждение пункта устарело. Выберите пункт выдачи повторно.');
+    }
+    return ['city' => $quote['point']['city'], 'point' => $quote['point']['code'], 'address' => $quote['point']['address'], 'quoteId' => $quote['quoteId'], 'shippingAmount' => $quote['amount'], 'tariffCode' => $quote['tariffCode'], 'estimated' => $estimate];
 }
 
 function mahara_shipping_api(string $path, string $method): void {

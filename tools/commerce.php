@@ -40,14 +40,18 @@ try {
     $legalMissing = array_column(mahara_merchant_missing(), 'label');
     if ($usesBuiltinLegal && !$legal['ready']) $missing[] = 'Публикация заполненных условий продажи и политики персональных данных';
     if (!mahara_config()['origin'] || (mahara_config()['production'] && !str_starts_with(mahara_config()['origin'], 'https://'))) $missing[] = 'HTTPS-адрес сайта для уведомлений банка';
-    $shippingReady = function_exists('mahara_shipping_public_config') && mahara_shipping_public_config()['enabled'];
+    $shippingPublic = function_exists('mahara_shipping_public_config') ? mahara_shipping_public_config() : [];
+    $shippingReady = ($shippingPublic['enabled'] ?? false) === true;
+    $shippingEstimateEnabled = ($shippingPublic['estimateEnabled'] ?? true) === true;
     $cdek = function_exists('mahara_shipping_secrets') ? mahara_shipping_secrets() : ['account' => '', 'password' => ''];
     $hasCdek = $cdek['account'] !== '' && $cdek['password'] !== '';
-    if ($payments['delivery_mode'] === 'cdek_receiver' && !$shippingReady) $missing[] = 'Ключи СДЭК, город отправления, тарифы, вес и размеры упакованных вещей';
+    if ($payments['delivery_mode'] === 'cdek_receiver' && !$shippingReady) $missing[] = $shippingEstimateEnabled
+        ? 'Ключи СДЭК, город отправления, тарифы, вес и размеры упакованных вещей'
+        : 'API-реквизиты СДЭК и включение выбора пунктов выдачи';
     elseif ($payments['delivery_mode'] === 'unconfigured') $missing[] = 'Настройки доставки';
     if ($payments['enabled'] !== true) $missing[] = 'Включение оплаты после проверки настроек';
     echo json_encode(['bankCredentialsPresent' => $hasBank, 'cdekCredentialsPresent' => $hasCdek,
-        'paymentEnabled' => mahara_payments_public_config()['enabled'], 'shippingEnabled' => (bool)$shippingReady,
+        'paymentEnabled' => mahara_payments_public_config()['enabled'], 'shippingEnabled' => $shippingReady, 'shippingEstimateEnabled' => $shippingEstimateEnabled,
         'receiptRequestEnabled' => $payments['receipt_enabled'] === true,
         'legalPublished' => $legal['ready'], 'legalMissing' => $legalMissing,
         'mailReady' => mahara_mail_ready(), 'missing' => $missing], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR), "\n";

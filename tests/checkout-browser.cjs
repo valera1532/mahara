@@ -21,7 +21,7 @@ const cart = [{ id: 'hoodie-black', size: 'M', qty: 1 }];
 const token = 'local-checkout-test-token-0123456789';
 const recoveryToken = 'R'.repeat(43); const expiredRecoveryToken = 'E'.repeat(43);
 const recoveryMessage = 'Если номер и почта совпали с заказом, мы отправим ссылку для доступа. Проверьте также папку «Спам».';
-const fixture = { enabled: true, unitAmount: 1690000, orderStatus: 'pending', paymentUrl: 'https://qr.nspk.ru/local-fixture', paymentExpiresAt: null, paymentUnavailable: false, conflict: false, failCreate: false, shippingExpiresIn: 1200, shippingQuotes: 0, quoteDelayByPoint: {}, cityRequests: [], created: [], headers: [], recoveryEnabled: false, recoveryRequests: [], recoveryExchanges: [], usedRecoveryTokens: new Set(), recoveryDelay: 0 };
+const fixture = { enabled: true, unitAmount: 1690000, orderStatus: 'pending', paymentUrl: 'https://qr.nspk.ru/local-fixture', paymentExpiresAt: null, paymentUnavailable: false, conflict: false, failCreate: false, shippingEstimateEnabled: undefined, shippingQuoteOverride: null, shippingQuoteFailure: false, shippingRequests: [], shippingExpiresIn: 1200, shippingQuotes: 0, quoteDelayByPoint: {}, cityRequests: [], created: [], headers: [], recoveryEnabled: false, recoveryRequests: [], recoveryExchanges: [], usedRecoveryTokens: new Set(), recoveryDelay: 0 };
 const point = { code: 'MSK1', city: 'Москва', cityCode: 44, address: 'Тестовая улица, 1', name: 'Тестовый пункт' };
 const points = [point,
   { code: 'MSK2', city: 'Москва', cityCode: 44, address: 'Лесная улица, 2', name: 'Пункт у метро' },
@@ -47,7 +47,8 @@ async function fill(page) {
   await page.locator('[data-city-code="44"]').click();
   await page.locator('[data-point-trigger]').click();
   await page.locator('[data-point-code="MSK1"]').click();
-  await page.locator('[data-shipping-period]').waitFor({ state: 'visible' });
+  if (fixture.shippingEstimateEnabled === false) await page.locator('[data-shipping-status]').filter({ hasText: 'Пункт выдачи подтверждён' }).waitFor();
+  else await page.locator('[data-shipping-period]').waitFor({ state: 'visible' });
   await page.locator('#accepted-terms').check();
 }
 
@@ -91,7 +92,7 @@ async function run() {
         if (payload.token !== recoveryToken || fixture.usedRecoveryTokens.has(payload.token)) { status = 404; body = { error: 'Ссылка недействительна или уже использована. Запросите новую.' }; }
         else { fixture.usedRecoveryTokens.add(payload.token); body = { ...order(), accessToken: token }; }
       }
-      else if (pathname === '/api/shipping/config') body = { enabled: true, mode: 'cdek_receiver', message: '' };
+      else if (pathname === '/api/shipping/config') body = { enabled: true, mode: 'cdek_receiver', ...(fixture.shippingEstimateEnabled === undefined ? {} : { estimateEnabled: fixture.shippingEstimateEnabled }), message: '' };
       else if (pathname === '/api/shipping/cities') {
         const query = new URL(request.url()).searchParams.get('q'); fixture.cityRequests.push(query);
         if (query === 'Старый') { await delay(1000); body = { cities: [{ code: 99, name: 'Старое название', region: 'Старый регион' }] }; }
@@ -101,11 +102,15 @@ async function run() {
       else if (pathname === '/api/shipping/points') body = { points };
       else if (pathname === '/api/shipping/quote') {
         const quoteNumber = ++fixture.shippingQuotes;
-        const requestedPoint = points.find(item => item.code === request.postDataJSON().pointCode);
-        if (!requestedPoint) { status = 422; body = { error: 'Неизвестный пункт.' }; }
+        const requestBody = request.postDataJSON(); fixture.shippingRequests.push(requestBody);
+        const requestedPoint = points.find(item => item.code === requestBody.pointCode);
+        if (fixture.shippingQuoteFailure) { status = 503; body = { error: 'Не удалось подтвердить пункт выдачи. Попробуйте снова.' }; }
+        else if (!requestedPoint) { status = 422; body = { error: 'Неизвестный пункт.' }; }
         else {
           await delay(fixture.quoteDelayByPoint[requestedPoint.code] || 0);
-          body = { quoteId: `local-shipping-quote-${quoteNumber}`, amount: requestedPoint.code === 'MSK2' ? 49000 : 36000, currency: 'RUB', tariffCode: 136, periodMin: 2, periodMax: 3, point: requestedPoint, expiresAt: Date.now() / 1000 + fixture.shippingExpiresIn };
+          body = { quoteId: `local-shipping-quote-${quoteNumber}`, currency: 'RUB', point: requestedPoint, expiresAt: Date.now() / 1000 + fixture.shippingExpiresIn,
+            ...(fixture.shippingEstimateEnabled === false ? { amount: null, tariffCode: null, periodMin: null, periodMax: null, estimated: false } : { amount: requestedPoint.code === 'MSK2' ? 49000 : 36000, tariffCode: 136, periodMin: 2, periodMax: 3, estimated: true }),
+            ...(fixture.shippingQuoteOverride || {}) };
         }
       }
       else if (pathname === '/api/checkout/quote') body = quote(request.postDataJSON().items);
@@ -507,6 +512,85 @@ async function run() {
       check(rejectedRequests[3].delivery.quoteId !== rejectedRequests[0].delivery.quoteId, 'The accepted new attempt uses a fresh delivery quote');
       equal(rejectionReservations, 1, 'Rebuilding a proved rejected request creates one reservation');
     } finally { await rejectedContext.close(); }
+    // Point-only delivery confirms a trusted PVZ for this cart without inventing
+    // a free tariff or delivery date. Estimated delivery remains the default above.
+    const pointOnlyContext = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
+    const pointOnlyErrors = [];
+    const previousShipping = { estimateEnabled: fixture.shippingEstimateEnabled, expiresIn: fixture.shippingExpiresIn, orderStatus: fixture.orderStatus };
+    fixture.shippingEstimateEnabled = false; fixture.orderStatus = 'pending';
+    try {
+      await pointOnlyContext.route('**/api/**', routeApi);
+      await pointOnlyContext.addInitScript(items => localStorage.setItem('maharaCart', JSON.stringify(items)), cart);
+      const pointOnlyPage = await pointOnlyContext.newPage();
+      pointOnlyPage.on('pageerror', error => pointOnlyErrors.push(error.message));
+      await pointOnlyPage.goto(`${origin}/checkout.html`); await ready(pointOnlyPage); await fill(pointOnlyPage);
+      const confirmPoint = pointOnlyPage.locator('[data-calculate-shipping]');
+      const pointStatus = pointOnlyPage.locator('[data-shipping-status]');
+      const payment = pointOnlyPage.locator('[data-submit]');
+      const confirmed = async () => { await pointStatus.filter({ hasText: 'Пункт выдачи подтверждён' }).waitFor(); await pointOnlyPage.waitForFunction(() => !document.querySelector('[data-submit]').disabled); };
+      await confirmed();
+      equal(await pointOnlyPage.locator('[data-delivery-amount]').textContent(), 'Оплачивается СДЭК при получении', 'Point-only summary shows separate receiver payment instead of a zero price');
+      equal(await pointOnlyPage.locator('[data-delivery-label]').textContent(), 'Доставка СДЭК', 'Point-only summary does not promise a price calculation');
+      equal(await pointOnlyPage.locator('[data-total]').textContent(), await pointOnlyPage.locator('[data-subtotal]').textContent(), 'Only goods are charged now in point-only delivery');
+      check(await pointOnlyPage.locator('[data-shipping-period]').isHidden() && await pointOnlyPage.locator('[data-shipping-disclaimer]').isHidden(), 'Point-only delivery hides estimate dates and price disclaimer');
+      equal(await pointOnlyPage.locator('[data-shipping-period]').textContent(), '', 'Point-only response never renders null or invented delivery dates');
+      check((await pointOnlyPage.locator('[data-shipping-address]').textContent()).includes(point.address), 'Point-only confirmation displays the trusted PVZ address');
+      equal(await confirmPoint.textContent(), 'Подтвердить ПВЗ ещё раз', 'Point-only action confirms the PVZ instead of calculating delivery');
+      check(!(await pointOnlyPage.locator('[data-delivery-note]').textContent()).includes('покажем заранее'), 'Point-only introduction makes no upfront price promise');
+      for (const width of [390, 320]) {
+        await pointOnlyPage.setViewportSize({ width, height: 844 });
+        check(!(await pointOnlyPage.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), `${width}px: separate receiver payment text has no horizontal overflow`);
+      }
+
+      for (const override of [{ amount: 0 }, { amount: 36000 }, { tariffCode: 136 }, { periodMin: 0 }, { periodMax: 3 }, { estimated: true }, { estimated: undefined }, { point: points[1] }, { expiresAt: Date.now() / 1000 - 1 }]) {
+        fixture.shippingQuoteOverride = override;
+        await confirmPoint.click(); await pointStatus.filter({ hasText: 'Не удалось подтвердить пункт выдачи' }).waitFor();
+        check(await payment.isDisabled(), `Point-only rejects incoherent quote fields: ${Object.keys(override).join(', ')}`);
+        equal(await pointOnlyPage.locator('[data-delivery-amount]').textContent(), 'Оплачивается СДЭК при получении', 'A rejected point-only response never displays a fake tariff');
+      }
+      fixture.shippingQuoteOverride = null;
+      fixture.shippingQuoteFailure = true;
+      await confirmPoint.click(); await pointStatus.filter({ hasText: 'Не удалось подтвердить пункт выдачи' }).waitFor();
+      check(await payment.isDisabled(), 'A failed PVZ confirmation cannot create an order');
+      fixture.shippingQuoteFailure = false;
+      await confirmPoint.click(); await confirmed();
+
+      fixture.quoteDelayByPoint.MSK2 = 400;
+      await pointOnlyPage.locator('[data-point-trigger]').click(); await pointOnlyPage.locator('[data-point-code="MSK2"]').click();
+      check(await payment.isDisabled(), 'Changing a point-only PVZ disables payment until confirmation');
+      await pointOnlyPage.locator('[data-point-trigger]').click(); await pointOnlyPage.locator('[data-point-code="MSK1"]').click();
+      await confirmed(); await delay(500);
+      equal(await pointOnlyPage.locator('#shipping-point').inputValue(), 'MSK1', 'A stale point-only response cannot replace the latest PVZ');
+      check((await pointOnlyPage.locator('[data-shipping-address]').textContent()).includes(point.address), 'A stale point-only response cannot restore its old address');
+      fixture.quoteDelayByPoint.MSK2 = 0;
+
+      fixture.shippingExpiresIn = .25;
+      await confirmPoint.click(); await pointStatus.filter({ hasText: 'Подтверждение пункта выдачи устарело' }).waitFor();
+      check(await payment.isDisabled(), 'Expired point-only confirmation disables payment');
+      check(await pointOnlyPage.locator('[data-shipping-period]').isHidden(), 'Expiry does not reveal fabricated point-only dates');
+      fixture.shippingExpiresIn = 1200;
+      await confirmPoint.click(); await confirmed();
+
+      const ordersBeforeCartChange = fixture.created.length;
+      const changedCart = [{ ...cart[0], qty: 2 }];
+      await pointOnlyPage.evaluate(items => localStorage.setItem('maharaCart', JSON.stringify(items)), changedCart);
+      await payment.click(); await pointOnlyPage.locator('[data-error]').filter({ hasText: 'Корзина изменилась' }).waitFor();
+      equal(fixture.created.length, ordersBeforeCartChange, 'Cart changes cannot use the old point-only confirmation to create an order');
+      check(await payment.isDisabled(), 'Cart changes invalidate the trusted point-only confirmation');
+      equal(await confirmPoint.textContent(), 'Подтвердить пункт выдачи', 'Cart changes request a fresh PVZ confirmation');
+      await confirmPoint.click(); await confirmed();
+      equal(fixture.shippingRequests.at(-1).items, changedCart, 'Renewed point-only confirmation is bound to the updated cart');
+      await payment.click(); await pointOnlyPage.locator('[data-order]').waitFor({ state: 'visible' });
+      const submitted = fixture.created.at(-1);
+      equal(submitted.items, changedCart, 'Point-only order retains the newly confirmed cart');
+      equal(submitted.expectedTotalAmount, fixture.unitAmount * 2, 'Point-only payment amount includes goods only');
+      equal(submitted.delivery, { city: point.city, point: point.code, address: point.address, quoteId: `local-shipping-quote-${fixture.shippingQuotes}` }, 'Point-only order submits trusted PVZ, address and server confirmation ID');
+      equal(pointOnlyErrors, [], 'Point-only delivery has no browser runtime errors');
+    } finally {
+      fixture.shippingEstimateEnabled = previousShipping.estimateEnabled; fixture.shippingExpiresIn = previousShipping.expiresIn; fixture.orderStatus = previousShipping.orderStatus;
+      fixture.shippingQuoteOverride = null; fixture.shippingQuoteFailure = false; fixture.quoteDelayByPoint.MSK2 = 0;
+      await pointOnlyContext.close();
+    }
     equal(errors, [], 'No browser runtime errors');
     console.log(`PASS: ${checks} checkout browser checks (guest form, server quote, conflicts, idempotency, token privacy, bank links, paid-only settlement, recovery, mobile layout)`);
     console.log('Screenshots: .local/checkout-preview/desktop.png, mobile-390.png, mobile-320.png');

@@ -15,6 +15,9 @@
   const shipping = { config: null, city: null, cities: [], cityQuery: '', activeCity: -1, points: [], filteredPoints: [], activePoint: -1, quote: null, generation: 0, searchGeneration: 0, searchController: null, pointGeneration: 0, busy: false, searchTimer: null, expiryTimer: null };
   const money = amount => new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: amount % 100 ? 2 : 0 }).format(amount / 100);
   const amountValid = value => Number.isSafeInteger(value) && value >= 0;
+  const shippingEstimated = () => shipping.config?.estimateEnabled !== false;
+  const receiverPayment = 'Оплачивается СДЭК при получении';
+  const shippingButton = (repeat = false) => shippingEstimated() ? (repeat ? 'Рассчитать ещё раз' : 'Рассчитать доставку') : (repeat ? 'Подтвердить ПВЗ ещё раз' : 'Подтвердить пункт выдачи');
   const idValid = value => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(value);
   const hide = (selector, value = true) => { $(selector).hidden = value; };
 
@@ -117,7 +120,7 @@
     notice.hidden = Boolean(available);
     notice.textContent = !available && typeof config?.message === 'string' && config.message.trim() ? config.message : 'Оформление заказа временно недоступно. Пожалуйста, попробуйте позже.';
     if (config?.delivery?.mode === 'cdek_receiver') {
-      $('[data-delivery-note]').textContent = 'Выберите город и пункт выдачи. Стоимость доставки покажем заранее; оплатить её нужно СДЭК при получении.';
+      $('[data-delivery-note]').textContent = shippingEstimated() ? 'Выберите город и пункт выдачи. Стоимость доставки покажем заранее; оплатить её нужно СДЭК при получении.' : 'Выберите город и пункт выдачи. Доставка оплачивается СДЭК отдельно при получении.';
       $('[data-summary-note]').textContent = 'Сейчас вы оплачиваете товары. Доставка СДЭК оплачивается отдельно при получении.';
     } else {
       $('[data-delivery-note]').textContent = 'Укажите удобный пункт выдачи СДЭК.';
@@ -125,7 +128,8 @@
     }
     const receiver = config?.delivery?.mode === 'cdek_receiver';
     $('[data-total-label]').textContent = receiver ? 'К оплате сейчас' : 'Итого к оплате';
-    hide('[data-shipping-disclaimer]', !receiver);
+    hide('[data-shipping-disclaimer]', !receiver || !shippingEstimated());
+    $('[data-calculate-shipping]').textContent = shippingButton();
     hide('[data-shipping-picker]', !receiver); hide('[data-manual-point]', receiver); hide('[data-manual-address]', receiver);
     for (const selector of ['#delivery-point', '#delivery-address']) { $(selector).required = !receiver; $(selector).disabled = receiver; }
     $('#delivery-city').disabled = receiver && shipping.config?.enabled !== true;
@@ -135,7 +139,7 @@
       else $('#delivery-city').removeAttribute(attribute);
     }
     $('#city-help').textContent = receiver ? 'Введите название города, посёлка или станицы и выберите подсказку.' : 'Укажите населённый пункт доставки.';
-    if (receiver && shipping.config?.enabled !== true) shippingMessage('Расчёт доставки временно недоступен. Пожалуйста, попробуйте позже.');
+    if (receiver && shipping.config?.enabled !== true) shippingMessage(shippingEstimated() ? 'Расчёт доставки временно недоступен. Пожалуйста, попробуйте позже.' : 'Выбор пункта выдачи временно недоступен. Пожалуйста, попробуйте позже.');
     state.available = Boolean(available);
     updateSubmit();
   }
@@ -164,8 +168,8 @@
   function invalidateShipping() {
     shipping.generation += 1; shipping.quote = null; shipping.busy = false;
     clearTimeout(shipping.expiryTimer); shipping.expiryTimer = null;
-    $('[data-calculate-shipping]').disabled = false; $('[data-calculate-shipping]').textContent = 'Рассчитать доставку';
-    if (state.config?.delivery?.mode === 'cdek_receiver') $('[data-delivery-amount]').textContent = 'Не рассчитана';
+    $('[data-calculate-shipping]').disabled = false; $('[data-calculate-shipping]').textContent = shippingButton();
+    if (state.config?.delivery?.mode === 'cdek_receiver') $('[data-delivery-amount]').textContent = shippingEstimated() ? 'Не рассчитана' : receiverPayment;
     hide('[data-shipping-period]'); updateSubmit();
   }
 
@@ -303,7 +307,7 @@
       shipping.points = result.points;
       if (!shipping.points.length) { shippingMessage('В этом городе нет доступных пунктов выдачи. Выберите другой город.'); return; }
       $('#shipping-point').disabled = false; $('[data-point-trigger]').disabled = false; hide('[data-point-options]', false);
-      shippingMessage('Выберите удобный пункт — рассчитаем доставку.');
+      shippingMessage(shippingEstimated() ? 'Выберите удобный пункт — рассчитаем доставку.' : 'Выберите удобный пункт выдачи.');
     } catch (error) { if (generation === shipping.pointGeneration) shippingMessage(error.message, true); }
   }
 
@@ -313,33 +317,39 @@
     if (!point || !state.quote || shipping.config?.enabled !== true || state.orderId) return;
     const generation = shipping.generation;
     shipping.busy = true; updateSubmit();
-    $('[data-calculate-shipping]').disabled = true; $('[data-calculate-shipping]').textContent = 'Рассчитываем…';
+    $('[data-calculate-shipping]').disabled = true; $('[data-calculate-shipping]').textContent = shippingEstimated() ? 'Рассчитываем…' : 'Подтверждаем…';
     $('[data-shipping-address]').textContent = `${point.city}, ${point.address}`; hide('[data-shipping-address]', false); hide('[data-calculate-shipping]', false);
-    shippingMessage('Рассчитываем стоимость и срок доставки…');
+    shippingMessage(shippingEstimated() ? 'Рассчитываем стоимость и срок доставки…' : 'Подтверждаем пункт выдачи…');
     try {
       const result = await api('/api/shipping/quote', { method: 'POST', body: JSON.stringify({ items: state.items, pointCode: point.code }) });
       if (generation !== shipping.generation || state.orderId) return;
-      if (typeof result.quoteId !== 'string' || !result.quoteId || !amountValid(result.amount) || result.currency !== 'RUB' || result.point?.code !== point.code || String(result.point.cityCode) !== shipping.city || typeof result.point.city !== 'string' || typeof result.point.address !== 'string' || !Number.isInteger(result.periodMin) || !Number.isInteger(result.periodMax) || result.periodMin < 0 || result.periodMax < result.periodMin || expiresAt(result.expiresAt) <= Date.now()) throw new CheckoutError('Не удалось подтвердить расчёт доставки. Повторите попытку.');
+      const invalidQuoteMessage = shippingEstimated() ? 'Не удалось подтвердить расчёт доставки. Повторите попытку.' : 'Не удалось подтвердить пункт выдачи. Повторите попытку.';
+      if (!result || typeof result !== 'object' || Array.isArray(result)) throw new CheckoutError(invalidQuoteMessage);
+      const quoteModeValid = shippingEstimated()
+        ? result.estimated !== false && amountValid(result.amount) && Number.isInteger(result.periodMin) && Number.isInteger(result.periodMax) && result.periodMin >= 0 && result.periodMax >= result.periodMin
+        : result.estimated === false && result.amount === null && result.tariffCode === null && result.periodMin === null && result.periodMax === null;
+      if (!quoteModeValid || typeof result.quoteId !== 'string' || !result.quoteId || result.currency !== 'RUB' || result.point?.code !== point.code || String(result.point.cityCode) !== shipping.city || typeof result.point.city !== 'string' || !result.point.city.trim() || typeof result.point.address !== 'string' || !result.point.address.trim() || expiresAt(result.expiresAt) <= Date.now()) throw new CheckoutError(invalidQuoteMessage);
       shipping.quote = result;
-      $('[data-delivery-amount]').textContent = money(result.amount);
-      $('[data-shipping-period]').textContent = `Срок СДЭК: ${result.periodMin === result.periodMax ? result.periodMin : `${result.periodMin}–${result.periodMax}`} раб. дн., без дня приёмки. Доставка оплачивается при получении.`;
-      hide('[data-shipping-period]', false);
-      shippingMessage(`Доставка — ${money(result.amount)}. Оплачивается СДЭК отдельно при получении.`);
+      $('[data-shipping-address]').textContent = `${result.point.city}, ${result.point.address}`;
+      $('[data-delivery-amount]').textContent = shippingEstimated() ? money(result.amount) : receiverPayment;
+      $('[data-shipping-period]').textContent = shippingEstimated() ? `Срок СДЭК: ${result.periodMin === result.periodMax ? result.periodMin : `${result.periodMin}–${result.periodMax}`} раб. дн., без дня приёмки. Доставка оплачивается при получении.` : '';
+      hide('[data-shipping-period]', !shippingEstimated());
+      shippingMessage(shippingEstimated() ? `Доставка — ${money(result.amount)}. Оплачивается СДЭК отдельно при получении.` : `Пункт выдачи подтверждён. ${receiverPayment}.`);
       shipping.expiryTimer = setTimeout(() => {
         if (shipping.quote?.quoteId !== result.quoteId) return;
-        invalidateShipping(); shippingMessage('Расчёт устарел. Рассчитайте доставку ещё раз перед оплатой.');
+        invalidateShipping(); shippingMessage(shippingEstimated() ? 'Расчёт устарел. Рассчитайте доставку ещё раз перед оплатой.' : 'Подтверждение пункта выдачи устарело. Подтвердите ПВЗ ещё раз перед оплатой.');
       }, Math.min(2147483647, Math.max(0, expiresAt(result.expiresAt) - Date.now())));
     } catch (error) { if (generation === shipping.generation) shippingMessage(error.message, true); }
     finally {
       // A newer request owns its loading state.
       if (generation === shipping.generation) {
-        shipping.busy = false; $('[data-calculate-shipping]').disabled = false; $('[data-calculate-shipping]').textContent = 'Рассчитать ещё раз'; updateSubmit();
+        shipping.busy = false; $('[data-calculate-shipping]').disabled = false; $('[data-calculate-shipping]').textContent = shippingButton(Boolean(shipping.quote)); updateSubmit();
       }
     }
   }
 
   function renderQuote(quote) {
-    if (!Array.isArray(quote.items) || !quote.items.length || quote.currency !== 'RUB' || ![quote.subtotalAmount, quote.deliveryAmount, quote.totalAmount].every(amountValid) || quote.subtotalAmount + quote.deliveryAmount !== quote.totalAmount || quote.items.some(item => !item || !amountValid(item.unitAmount) || !amountValid(item.amount) || !Number.isSafeInteger(item.qty) || item.qty < 1 || item.unitAmount * item.qty !== item.amount || typeof item.title !== 'string') || quote.items.reduce((sum, item) => sum + item.amount, 0) !== quote.subtotalAmount) throw new CheckoutError('Не удалось подтвердить стоимость заказа. Попробуйте ещё раз.');
+    if (!Array.isArray(quote.items) || !quote.items.length || quote.currency !== 'RUB' || ![quote.subtotalAmount, quote.deliveryAmount, quote.totalAmount].every(amountValid) || (state.config?.delivery?.mode === 'cdek_receiver' && quote.deliveryAmount !== 0) || quote.subtotalAmount + quote.deliveryAmount !== quote.totalAmount || quote.items.some(item => !item || !amountValid(item.unitAmount) || !amountValid(item.amount) || !Number.isSafeInteger(item.qty) || item.qty < 1 || item.unitAmount * item.qty !== item.amount || typeof item.title !== 'string') || quote.items.reduce((sum, item) => sum + item.amount, 0) !== quote.subtotalAmount) throw new CheckoutError('Не удалось подтвердить стоимость заказа. Попробуйте ещё раз.');
     const nodes = quote.items.map(item => {
       const row = document.createElement('li'); row.className = 'checkout-item';
       const picture = document.createElement('img'); picture.alt = ''; picture.width = 65; picture.height = 88;
@@ -352,8 +362,8 @@
     });
     $('[data-items]').replaceChildren(...nodes);
     $('[data-subtotal]').textContent = money(quote.subtotalAmount);
-    $('[data-delivery-label]').textContent = state.config?.delivery?.mode === 'cdek_receiver' ? 'Расчёт доставки СДЭК' : typeof state.config?.delivery?.label === 'string' ? state.config.delivery.label : 'Доставка СДЭК';
-    $('[data-delivery-amount]').textContent = state.config?.delivery?.mode === 'cdek_receiver' ? (shippingValid() ? money(shipping.quote.amount) : 'Не рассчитана') : money(quote.deliveryAmount);
+    $('[data-delivery-label]').textContent = state.config?.delivery?.mode === 'cdek_receiver' ? (shippingEstimated() ? 'Расчёт доставки СДЭК' : 'Доставка СДЭК') : typeof state.config?.delivery?.label === 'string' ? state.config.delivery.label : 'Доставка СДЭК';
+    $('[data-delivery-amount]').textContent = state.config?.delivery?.mode === 'cdek_receiver' ? (shippingEstimated() ? (shippingValid() ? money(shipping.quote.amount) : 'Не рассчитана') : receiverPayment) : money(quote.deliveryAmount);
     $('[data-total]').textContent = money(quote.totalAmount);
     state.quote = quote;
     updateSubmit();
@@ -482,7 +492,7 @@
         await refreshQuote(); throw new CheckoutError('Корзина изменилась. Проверьте обновлённую сумму и повторите оформление.');
       }
       if (!storageAvailable()) throw new CheckoutError('Разрешите хранение данных в браузере, чтобы сохранить доступ к оплате заказа.');
-      if (state.config.delivery?.mode === 'cdek_receiver' && !shippingValid()) throw new CheckoutError('Выберите пункт выдачи и рассчитайте доставку перед оплатой.');
+      if (state.config.delivery?.mode === 'cdek_receiver' && !shippingValid()) throw new CheckoutError(shippingEstimated() ? 'Выберите пункт выдачи и рассчитайте доставку перед оплатой.' : 'Выберите и подтвердите пункт выдачи перед оплатой.');
       const values = new FormData(form);
       const delivery = state.config.delivery?.mode === 'cdek_receiver'
         ? { city: shipping.quote.point.city, point: shipping.quote.point.code, address: shipping.quote.point.address, quoteId: shipping.quote.quoteId }

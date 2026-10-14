@@ -13,9 +13,11 @@ return [
     // Account/password: private data_dir/cdek-secrets.php. No map API key required.
     'shipping' => [
         'enabled' => false,
-        'origin_city_code' => 0, // Actual CDEK city code of the sender.
-        'tariff_codes' => [], // Allowed office-delivery tariffs under this contract.
+        'estimate_enabled' => true, // false: verified PVZ only, no price/dates; recipient pays CDEK separately.
+        'origin_city_code' => 0, // Required only for estimates: actual CDEK city code of the sender.
+        'tariff_codes' => [], // Required only for estimates: allowed office-delivery tariffs under this contract.
         'packages_by_category' => [
+            // Required only when estimate_enabled=true; never guess package measurements.
             // 'hoodie' => ['weight' => 0, 'width' => 0, 'height' => 0, 'length' => 0],
             // 'tee' => ['weight' => 0, 'width' => 0, 'height' => 0, 'length' => 0],
         ],
