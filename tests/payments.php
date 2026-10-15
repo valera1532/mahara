@@ -86,12 +86,24 @@ foreach (['http://qr.nspk.ru/abc', 'https://qr.nspk.ru.evil.test/abc', 'https://
 payment_verify(mahara_tbank_url('https://qr.nspk.ru/abc?sum=1000') !== null && mahara_tbank_url('https://securepay.tinkoff.ru/abc') !== null, 'Known HTTPS provider domains are accepted.');
 payment_verify(mahara_tbank_svg('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>') === null, 'Active SVG is rejected.');
 payment_verify(mahara_tbank_svg('<!DOCTYPE svg [<!ENTITY x SYSTEM "file:///etc/passwd">]><svg>&x;</svg>') === null, 'External XML entities are rejected.');
+$bankSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200" text-rendering="auto" id="qr"><rect width="200" height="200" fill="black" style="fill:rgb(255,255,255);fill-opacity:1.0;"/><g id="pixels" fill-rule="evenodd" style="fill:rgb(0, 0, 0);fill-opacity:1.0"><path d="M0 0h10v10z"/></g></svg>';
+$normalizedBankSvg = mahara_tbank_svg($bankSvg);
+payment_verify($normalizedBankSvg !== null && !preg_match('/\s(?:style|id|text-rendering)=/', $normalizedBankSvg), 'Observed bank QR paint is normalized and non-rendering identifiers removed.');
+$normalizedBankDoc = new DOMDocument(); $normalizedBankDoc->loadXML($normalizedBankSvg);
+payment_verify($normalizedBankDoc->getElementsByTagName('rect')->item(0)->getAttribute('fill') === 'rgb(255,255,255)' && $normalizedBankDoc->getElementsByTagName('rect')->item(0)->getAttribute('fill-opacity') === '1.0', 'Inline white paint overrides presentation fill and preserves opacity.');
+payment_verify($normalizedBankDoc->getElementsByTagName('g')->item(0)->getAttribute('fill') === 'rgb(0, 0, 0)' && $normalizedBankDoc->getElementsByTagName('g')->item(0)->getAttribute('fill-rule') === 'evenodd', 'Black QR geometry and an allowed fill rule survive normalization.');
+foreach (['fill:url(https://attacker.example/a)', 'fill:rgb(256,0,0)', 'fill:rgba(0,0,0,1)', 'fill:rgb(0,0,0);background:white', 'fill:rgb(0,0,0)!important', 'fill:rgb(0,0,0);fill-opacity:1.01', 'fill:rgb(0,0,0);fill-opacity:-0.1', 'fill:rgb(0,0,0);fill-opacity:expression(alert(1))', 'f\\69ll:rgb(0,0,0)', 'f/**/ill:rgb(0,0,0)', '@import url(https://attacker.example/a)'] as $unsafeStyle) {
+    payment_verify(mahara_tbank_svg('<svg xmlns="http://www.w3.org/2000/svg" style="' . $unsafeStyle . '"><path d="M0 0"/></svg>') === null, 'Unsupported or active bank QR CSS is rejected.');
+}
+foreach (['<path onload="alert(1)" style="fill:rgb(0,0,0)"/>', '<path href="https://attacker.example/a"/>', '<image href="https://attacker.example/a"/>', '<path fill-rule="url(https://attacker.example/a)"/>', '<path fill-opacity="2"/>'] as $unsafeNode) {
+    payment_verify(mahara_tbank_svg('<svg xmlns="http://www.w3.org/2000/svg">' . $unsafeNode . '</svg>') === null, 'QR normalization does not permit events, references or invalid paint values.');
+}
 payment_verify(mahara_payments_legal_url('https://user@example.test/terms') === null, 'Legal URL cannot contain credentials.');
 
 $GLOBALS['mahara_payments_test_secrets'] = ['terminal_key' => 'TEST-TERMINAL', 'password' => 'fixture-password'];
 $GLOBALS['mahara_payments_test_config'] = ['enabled' => false, 'receipt_enabled' => true, 'taxation' => 'usn_income', 'item_tax' => 'none', 'delivery_mode' => 'cdek_receiver', 'terms_url' => 'https://merchant.example.test/terms', 'privacy_url' => 'https://merchant.example.test/privacy'];
 $calls = []; $bank = []; $lostInit = false; $failMethod = ''; $unsafeQr = false;
-$GLOBALS['mahara_payments_test_transport'] = static function (string $method, array $payload, string $url) use (&$calls, &$bank, &$lostInit, &$failMethod, &$unsafeQr): array {
+$GLOBALS['mahara_payments_test_transport'] = static function (string $method, array $payload, string $url) use (&$calls, &$bank, &$lostInit, &$failMethod, &$unsafeQr, $bankSvg): array {
     $calls[] = $method;
     payment_verify($url === 'https://securepay.tinkoff.ru/v2/' . $method, 'Transport target is fixed.');
     payment_verify($payload['Token'] === mahara_tbank_token($payload, 'fixture-password'), 'All API calls carry a correct token.');
@@ -110,7 +122,7 @@ $GLOBALS['mahara_payments_test_transport'] = static function (string $method, ar
     if (!isset($bank[$paymentId])) throw new RuntimeException('Unknown fixture payment.');
     if ($method === 'GetQr') {
         payment_verify($payload['PaymentMethod'] === 'SBP', 'QR explicitly requests SBP.');
-        return ['Success' => true, 'ErrorCode' => '0', 'PaymentId' => $paymentId, 'Data' => $payload['DataType'] === 'IMAGE' ? '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="white"/><path d="M0 0h10v10H0z" fill="black"/></svg>' : ($unsafeQr ? 'https://attacker.example/pay' : 'https://qr.nspk.ru/' . $paymentId . '?type=02')];
+        return ['Success' => true, 'ErrorCode' => '0', 'PaymentId' => $paymentId, 'Data' => $payload['DataType'] === 'IMAGE' ? $bankSvg : ($unsafeQr ? 'https://attacker.example/pay' : 'https://qr.nspk.ru/' . $paymentId . '?type=02')];
     }
     if ($method === 'Cancel') {
         $bank[$paymentId]['Status'] = $bank[$paymentId]['Status'] === 'CONFIRMED' ? 'REFUNDED' : 'CANCELED';
@@ -210,6 +222,7 @@ foreach ($raceResults as $raceResult) if ($raceResult['status'] === 201) mahara_
 payment_verify(mahara_payments_reserved($id, 'M') === 0, 'Concurrent fixture reservation is safely released by verified cancellation.');
 $created = mahara_payments_create($request); $orderId = $created['order']['id']; $row = mahara_payments_row($orderId);
 payment_verify($created['order']['status'] === 'payment_pending' && str_starts_with($created['payment']['url'], 'https://qr.nspk.ru/'), 'Created order exposes only SBP link and pending status.');
+payment_verify(is_string($created['payment']['qrSvg']) && $created['payment']['qrSvg'] === $row['qr_svg'] && !preg_match('/\s(?:style|id|text-rendering)=/', $created['payment']['qrSvg']), 'The observed bank IMAGE format is safely persisted and returned for checkout display.');
 payment_verify(!isset($created['order']['customer']) && !isset($created['order']['delivery']) && !isset($created['order']['paymentId']), 'Public order does not expose contact information or bank metadata.');
 payment_verify(strlen($created['accessToken']) === 43 && !str_contains($created['payment']['url'], $created['accessToken']), 'Order bearer token stays out of bank URL.');
 payment_verify(mahara_payments_reserved($id, 'S') === 2 && payment_balance($id) === 12, 'Creation reserves stock without an inventory writeoff.');

@@ -243,12 +243,36 @@ function mahara_tbank_svg(mixed $svg): ?string {
     try { if (!$doc->loadXML($svg, LIBXML_NONET) || !$doc->documentElement || $doc->documentElement->localName !== 'svg') return null; }
     finally { libxml_clear_errors(); libxml_use_internal_errors($old); }
     $tags = ['svg', 'g', 'path', 'rect'];
-    $attributes = ['xmlns', 'version', 'width', 'height', 'viewBox', 'fill', 'stroke', 'stroke-width', 'd', 'x', 'y', 'rx', 'ry', 'transform', 'shape-rendering'];
+    $attributes = ['xmlns', 'version', 'width', 'height', 'viewBox', 'fill', 'fill-opacity', 'fill-rule', 'stroke', 'stroke-width', 'd', 'x', 'y', 'rx', 'ry', 'transform', 'shape-rendering'];
     foreach ($doc->getElementsByTagName('*') as $node) {
         if (!in_array($node->nodeName, $tags, true)) return null;
+        // The bank's QR uses these two inline paint declarations. Normalize only
+        // that small format; never preserve a general CSS style attribute.
+        if ($node->hasAttribute('style')) {
+            $style = $node->getAttribute('style'); $paint = [];
+            if (preg_match('~[\\\\<>@]|/\*|url\s*\(~i', $style)) return null;
+            foreach (explode(';', $style) as $declaration) {
+                if (trim($declaration) === '') continue;
+                if (!preg_match('/^\s*(fill|fill-opacity)\s*:\s*(.*?)\s*$/iD', $declaration, $match)) return null;
+                $property = strtolower($match[1]); $value = $match[2];
+                if ($property === 'fill-opacity') {
+                    if (!preg_match('/^(?:0(?:\.[0-9]+)?|1(?:\.0+)?)$/D', $value)) return null;
+                } else {
+                    if (!preg_match('/^rgb\(\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})\s*\)$/iD', $value, $rgb) || max((int)$rgb[1], (int)$rgb[2], (int)$rgb[3]) > 255) return null;
+                }
+                $paint[$property] = $value;
+            }
+            $node->removeAttribute('style');
+            // Inline style takes precedence over existing presentation attributes.
+            foreach ($paint as $property => $value) $node->setAttribute($property, $value);
+        }
+        // There are no text elements or local references in the accepted format.
+        $node->removeAttribute('id'); $node->removeAttribute('text-rendering');
         foreach ($node->attributes as $attribute) {
             if (!in_array($attribute->nodeName, $attributes, true) || preg_match('/url\s*\(|[<>]/i', $attribute->value)) return null;
             if ($attribute->nodeName === 'xmlns' && $attribute->value !== 'http://www.w3.org/2000/svg') return null;
+            if ($attribute->nodeName === 'fill-rule' && !in_array($attribute->value, ['nonzero', 'evenodd'], true)) return null;
+            if ($attribute->nodeName === 'fill-opacity' && !preg_match('/^(?:0(?:\.[0-9]+)?|1(?:\.0+)?)$/D', $attribute->value)) return null;
         }
     }
     return $doc->saveXML($doc->documentElement) ?: null;
