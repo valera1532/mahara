@@ -36,9 +36,7 @@ try {
     $terms = mahara_payments_legal_url($payments['terms_url']); $privacy = mahara_payments_legal_url($payments['privacy_url']);
     if (!$terms || !$privacy) $missing[] = 'Ссылки на условия продажи и политику персональных данных';
     $legal = mahara_merchant_legal_status();
-    $usesBuiltinLegal = mahara_payments_builtin_legal_url($terms) || mahara_payments_builtin_legal_url($privacy);
     $legalMissing = array_column(mahara_merchant_missing(), 'label');
-    if ($usesBuiltinLegal && !$legal['ready']) $missing[] = 'Публикация заполненных условий продажи и политики персональных данных';
     if (!mahara_config()['origin'] || (mahara_config()['production'] && !str_starts_with(mahara_config()['origin'], 'https://'))) $missing[] = 'HTTPS-адрес сайта для уведомлений банка';
     $shippingPublic = function_exists('mahara_shipping_public_config') ? mahara_shipping_public_config() : [];
     $shippingReady = ($shippingPublic['enabled'] ?? false) === true;

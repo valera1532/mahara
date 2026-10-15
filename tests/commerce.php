@@ -3,6 +3,15 @@ declare(strict_types=1);
 
 // Exercise the real shipping -> checkout -> notification flow against an isolated
 // database. Only the two providers' HTTP transports use synthetic responses.
+if (($argv[1] ?? '') === '--status-fixture') {
+    $GLOBALS['mahara_app_test_config'] = ['production' => false, 'origin' => 'https://merchant.example.test',
+        'payments' => ['enabled' => true, 'receipt_enabled' => true, 'taxation' => 'usn_income', 'item_tax' => 'none', 'delivery_mode' => 'fixed', 'terms_url' => '/terms.html', 'privacy_url' => '/privacy.html']];
+    $GLOBALS['mahara_payments_test_secrets'] = ['terminal_key' => 'TEST-ONLY', 'password' => 'test-only-bank-password'];
+    $GLOBALS['mahara_shipping_test_secrets'] = ['account' => '', 'password' => ''];
+    $GLOBALS['mahara_mail_test_secrets'] = ['username' => '', 'password' => ''];
+    $GLOBALS['mahara_payments_test_transport'] = static function (): never { throw new RuntimeException('Status cannot call the bank.'); };
+    $argv = [__FILE__, 'status']; require dirname(__DIR__) . '/tools/commerce.php'; exit;
+}
 if (($argv[1] ?? '') !== '--worker') {
     $privateDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'mahara-commerce-' . bin2hex(random_bytes(12));
     if (!mkdir($privateDir, 0700)) throw new RuntimeException('Cannot create test directory.');
@@ -46,7 +55,7 @@ $GLOBALS['mahara_shipping_test_config'] = [
 $GLOBALS['mahara_shipping_test_secrets'] = ['account' => 'test-only-account', 'password' => 'test-only-password'];
 $GLOBALS['mahara_payments_test_config'] = [
     'enabled' => true, 'receipt_enabled' => true, 'taxation' => 'usn_income', 'item_tax' => 'none',
-    'delivery_mode' => 'cdek_receiver', 'terms_url' => 'https://merchant.example.test/terms', 'privacy_url' => 'https://merchant.example.test/privacy',
+    'delivery_mode' => 'cdek_receiver', 'terms_url' => '/terms.html', 'privacy_url' => '/privacy.html',
 ];
 $GLOBALS['mahara_payments_test_secrets'] = ['terminal_key' => 'TEST-TERMINAL', 'password' => 'fixture-password'];
 $GLOBALS['mahara_mail_test_config'] = ['enabled' => true, 'host' => 'smtp.example.test', 'from' => 'shop@example.test', 'shop_email' => 'owner@example.test'];
@@ -90,6 +99,14 @@ function commerce_state(): array {
         'cdekCalls' => count($cdekCalls), 'bankCalls' => count($bankCalls),
     ];
 }
+
+$statusProcess = proc_open([PHP_BINARY, __FILE__, '--status-fixture'], [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $statusPipes, dirname(__DIR__), null, ['bypass_shell' => true]);
+if (!is_resource($statusProcess)) throw new RuntimeException('Cannot start isolated readiness fixture.');
+fclose($statusPipes[0]); $statusOutput = stream_get_contents($statusPipes[1]); $statusErrors = stream_get_contents($statusPipes[2]); fclose($statusPipes[1]); fclose($statusPipes[2]);
+commerce_verify(proc_close($statusProcess) === 0 && $statusErrors === '', 'Readiness report runs without bank requests or private shop files.');
+$readiness = json_decode($statusOutput, true, 64, JSON_THROW_ON_ERROR);
+commerce_verify($readiness['paymentEnabled'] === true && $readiness['legalPublished'] === false && $readiness['legalMissing'] !== [] && $readiness['missing'] === [], 'Draft documents remain honestly unpublished and informational without blocking payment readiness.');
+commerce_verify(!mahara_merchant_legal_status()['ready'] && mahara_payments_public_config()['enabled'], 'Configured checkout can operate with built-in draft documents without publishing them.');
 
 $GLOBALS['mahara_shipping_test_transport'] = static function (string $method, string $path, array $data, ?string $token) use (&$cdekCalls): array {
     $cdekCalls[] = [$method, $path, $data];
@@ -155,7 +172,7 @@ $cdekCount = count($cdekCalls);
 $created = mahara_payments_create($request);
 $row = mahara_payments_row($created['order']['id']);
 commerce_verify(mahara_query("SELECT COUNT(*) FROM order_mail_queue WHERE event='order_created'")->fetchColumn() === 2, 'Creation schedules customer/shop notification jobs without sending SMTP.');
-commerce_verify((int)$row['accepted_at'] >= (int)$row['created_at'] && $row['terms_url'] === 'https://merchant.example.test/terms' && $row['privacy_url'] === 'https://merchant.example.test/privacy' && $row['legal_version'] === 'external', 'Integration persists acceptance evidence at the original order creation.');
+commerce_verify((int)$row['accepted_at'] >= (int)$row['created_at'] && $row['terms_url'] === '/terms.html' && $row['privacy_url'] === '/privacy.html' && $row['legal_version'] === '', 'Integration persists actual draft document URLs and an empty version without inventing publication.');
 $delivery = json_decode($row['delivery_json'], true, 64, JSON_THROW_ON_ERROR);
 commerce_verify($created['order']['status'] === 'payment_pending' && $created['payment']['url'] === 'https://qr.nspk.ru/' . $row['payment_id'] . '?type=02', 'Checkout creates a pending order and usable SBP link.');
 commerce_verify($created['order']['totalAmount'] === 380000 && $created['order']['deliveryAmount'] === 0 && $delivery['shippingAmount'] === 34567, 'The bank total contains goods only while the receiver-paid estimate is stored separately.');

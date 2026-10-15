@@ -25,7 +25,8 @@ function mahara_payments_legal_snapshot(): array {
     $config = mahara_payments_config();
     $status = function_exists('mahara_merchant_legal_status') ? mahara_merchant_legal_status() : [];
     return ['termsUrl' => $config['terms_url'], 'privacyUrl' => $config['privacy_url'],
-        'legalVersion' => is_string($status['version'] ?? null) && $status['version'] !== '' ? $status['version'] : 'external'];
+        'legalVersion' => is_string($status['version'] ?? null) && $status['version'] !== '' ? $status['version']
+            : ((mahara_payments_builtin_legal_url($config['terms_url']) || mahara_payments_builtin_legal_url($config['privacy_url'])) ? '' : 'external')];
 }
 
 function mahara_payments_builtin_legal_url(?string $url): bool {
@@ -106,8 +107,6 @@ function mahara_payments_public_config(): array {
     $validDelivery = $mode !== 'unconfigured' && ($mode !== 'fixed' || $amount === $config['delivery_amount']);
     if ($mode === 'cdek_receiver') $validDelivery = $validDelivery && function_exists('mahara_shipping_public_config') && mahara_shipping_public_config()['enabled'] === true;
     $terms = mahara_payments_legal_url($config['terms_url']); $privacy = mahara_payments_legal_url($config['privacy_url']);
-    $builtInLegal = mahara_payments_builtin_legal_url($terms) || mahara_payments_builtin_legal_url($privacy);
-    $legalReady = !$builtInLegal || (function_exists('mahara_merchant_legal_status') && (mahara_merchant_legal_status()['ready'] ?? false) === true);
     $taxes = ['none', 'vat0', 'vat5', 'vat7', 'vat10', 'vat22', 'vat105', 'vat107', 'vat110', 'vat122'];
     $validReceipt = $config['receipt_enabled'] === true && in_array($config['taxation'], ['osn', 'usn_income', 'usn_income_outcome', 'esn', 'patent'], true)
         && in_array($config['item_tax'], $taxes, true) && in_array($config['ffd_version'], ['1.05', '1.2'], true);
@@ -116,7 +115,7 @@ function mahara_payments_public_config(): array {
     $origin = mahara_config()['origin'];
     $validOrigin = is_string($origin) && $origin !== '' && (!mahara_config()['production'] || str_starts_with($origin, 'https://'));
     $certificatesReady = mahara_tbank_certificates_ready();
-    $enabled = $config['enabled'] === true && $validDelivery && $validReceipt && $credentials && $terms !== null && $privacy !== null && $legalReady && $validOrigin && $certificatesReady;
+    $enabled = $config['enabled'] === true && $validDelivery && $validReceipt && $credentials && $terms !== null && $privacy !== null && $validOrigin && $certificatesReady;
     return ['enabled' => $enabled, 'currency' => 'RUB',
         'delivery' => ['mode' => $mode, 'label' => is_string($config['delivery_label']) && $config['delivery_label'] !== '' ? $config['delivery_label'] : ($mode === 'cdek_receiver' ? 'СДЭК — доставка оплачивается при получении отдельно' : 'Доставка'), 'amount' => $amount],
         'legal' => ['termsUrl' => $terms, 'privacyUrl' => $privacy],

@@ -180,11 +180,15 @@ payment_verify(!mahara_payments_public_config()['enabled'], 'Missing real legal 
 $GLOBALS['mahara_payments_test_config']['terms_url'] = 'https://merchant.example.test/terms';
 foreach (['/terms.html', '/privacy.html?version=1', '/%74erms.html', '/./terms.html', '/a/../privacy.html', 'https://mahara.example.test/terms.html', 'https://mahara.example.test/a/%2e%2e/privacy.html', 'https://127.0.0.1/terms.html'] as $builtin) {
     $GLOBALS['mahara_payments_test_config']['terms_url'] = $builtin;
-    // The HTTPS fixture is a different origin: only same-origin built-ins gate.
-    payment_verify(mahara_payments_public_config()['enabled'] === str_starts_with($builtin, 'https://127.0.0.1'), 'Unpublished built-in legal documents cannot activate checkout: ' . $builtin);
+    payment_verify(mahara_payments_public_config()['enabled'], 'Draft document status does not block otherwise configured checkout: ' . $builtin);
 }
 payment_verify(mahara_payments_builtin_legal_url('https://mahara.example.test/terms.html') && mahara_payments_builtin_legal_url('https://mahara.example.test/%70rivacy.html?v=1'), 'Absolute same-origin built-in legal URLs are recognized.');
-payment_verify(!mahara_payments_builtin_legal_url('https://other.example.test/terms.html'), 'External legal documents do not use the built-in draft gate.');
+payment_verify(!mahara_payments_builtin_legal_url('https://other.example.test/terms.html'), 'External legal documents remain distinguishable from built-in documents.');
+$GLOBALS['mahara_payments_test_config']['terms_url'] = '/terms.html';
+payment_verify(mahara_payments_legal_snapshot()['legalVersion'] === '', 'An unversioned built-in document retains an honest empty version.');
+$noConsent = $request; $noConsent['acceptedTerms'] = false; $beforeConsentCalls = count($calls);
+payment_error(400, static fn() => mahara_payments_create($noConsent), 'Draft availability never substitutes for customer acceptance');
+payment_verify(count($calls) === $beforeConsentCalls && (int)mahara_query('SELECT COUNT(*) FROM checkout_orders')->fetchColumn() === 0, 'Missing acceptance creates no order or bank request.');
 $GLOBALS['mahara_payments_test_config']['terms_url'] = 'https://merchant.example.test/terms';
 $tampered = $request; $tampered['items'][0]['unitAmount'] = 1;
 payment_error(400, static fn() => mahara_payments_create($tampered), 'Client price field is rejected');
