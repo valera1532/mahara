@@ -53,3 +53,34 @@ test('conflicting revisions surface server message/status',async()=>{
   const api=client(async url=>url.endsWith('/session')?{ok:true,json:async()=>({csrfToken:'csrf'})}:{ok:false,status:409,json:async()=>({error:'Версия изменилась'})});
   await assert.rejects(api.save({...defaults,revision:1}),error=>error.status===409&&error.message==='Версия изменилась');
 });
+
+test('ten ordered product photos survive load and save with canonical legacy aliases',async()=>{
+  const content={...structuredClone(defaults),revision:8};
+  const photos=Array.from({length:10},(_,index)=>`assets/uploads/photo-${index}.webp`);
+  Object.assign(content.products[0],{images:photos,image:content.products[0].image,altImage:content.products[0].altImage});
+  const calls=[];
+  const api=client(async(url,options)=>{calls.push({url,options});return {ok:true,json:async()=>url.endsWith('/session')?{csrfToken:'csrf'}:content};});
+  const loaded=await api.load();
+  assert.deepEqual(JSON.parse(JSON.stringify(loaded.products[0].images)),photos);
+  assert.equal(loaded.products[0].image,photos[0]);assert.equal(loaded.products[0].altImage,photos[1]);
+  const saved=await api.save(loaded);
+  const payload=JSON.parse(calls.find(call=>call.options?.method==='PUT').options.body);
+  assert.deepEqual(payload.products[0].images,photos);
+  assert.deepEqual(JSON.parse(JSON.stringify(saved.products[0].images)),photos);
+});
+
+test('legacy photo pairs and a single image normalize without duplicates',async()=>{
+  const content=structuredClone(defaults);
+  content.products[1].altImage=content.products[1].image;
+  const api=client(async()=>({ok:true,json:async()=>content}));const value=await api.load();
+  assert.deepEqual(JSON.parse(JSON.stringify(value.products[0].images)),[content.products[0].image,content.products[0].altImage]);
+  assert.deepEqual(JSON.parse(JSON.stringify(value.products[1].images)),[content.products[1].image]);
+  assert.equal(value.products[1].altImage,value.products[1].image);
+  assert.deepEqual(JSON.parse(JSON.stringify(api.productImages({image:'',altImage:''}))),[]);
+});
+
+test('photo helper preserves unique order and rejects external or unsafe paths',()=>{
+  const api=client(async()=>({ok:true,json:async()=>defaults}));
+  const value=api.productImages({images:['assets/uploads/two.png','https://other.example/a.jpg','assets/uploads/../secret.jpg','assets/uploads/one.webp','assets/uploads/two.png']});
+  assert.deepEqual(JSON.parse(JSON.stringify(value)),['assets/uploads/two.png','assets/uploads/one.webp']);
+});

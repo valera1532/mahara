@@ -135,37 +135,6 @@
     card.append(wrapper);
     return card;
   }
-  function renderHistory() {
-    const list = $('[data-movement-list]');
-    list.replaceChildren();
-    $('[data-history-empty]').hidden = snapshot.movements.length !== 0;
-    if (!snapshot.movements.length) return;
-    const wrapper = element('div', 'inventory-table-wrap');
-    const table = element('table', 'inventory-table inventory-history');
-    const caption = element('caption', 'sr-only', 'Последние 100 операций со складом');
-    const thead = element('thead');
-    const headings = element('tr');
-    ['Когда / Кто', 'Товар / Размер', 'Операция', 'Было → Стало', 'Комментарий'].forEach(text => {
-      const th = element('th', '', text); th.scope = 'col'; headings.append(th);
-    });
-    thead.append(headings);
-    const tbody = element('tbody');
-    snapshot.movements.forEach(movement => {
-      const row = element('tr');
-      const when = element('td');
-      const date = new Date(typeof movement.createdAt === 'number' ? movement.createdAt * 1000 : movement.createdAt);
-      when.append(element('span', '', date.toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })), element('small', '', movement.actor));
-      const product = element('td');
-      product.append(element('span', '', movement.productTitle), element('small', '', `${movement.productId} · ${movement.size}`));
-      const operation = element('td');
-      operation.append(element('span', '', typeNames[movement.type]), element('small', '', movement.type === 'receipt' ? `+${movement.quantity} шт.` : movement.type === 'writeoff' ? `−${movement.quantity} шт.` : `Факт: ${movement.quantity} шт.`));
-      row.append(when, product, operation, element('td', 'inventory-history__balance', `${movement.before === null ? 'Не задано' : movement.before} → ${movement.after}`), element('td', 'inventory-history__note', movement.note || '—'));
-      tbody.append(row);
-    });
-    table.append(caption, thead, tbody);
-    wrapper.append(table);
-    list.append(wrapper);
-  }
   function renderProducts() {
     const products = selectedProducts();
     $('[data-product-list]').replaceChildren(...products.map(productCard));
@@ -183,7 +152,6 @@
     $('[data-inventory-error]').hidden = true;
     $('[data-reload]').hidden = true;
     renderProducts();
-    renderHistory();
   }
   async function refresh() {
     if (refreshing) return;

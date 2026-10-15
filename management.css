@@ -1,6 +1,7 @@
 .page-admin,
 .page-inventory,
-.page-orders { --header-h: 80px; }
+.page-orders,
+.page-operations { --header-h: 80px; }
 
 .management-header {
   position: sticky;
@@ -36,6 +37,7 @@
 }
 .management-nav a {
   position: relative;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -74,7 +76,9 @@
 }
 @media (max-width: 800px) {
   .page-admin,
-  .page-inventory { --header-h: 112px; }
+  .page-inventory,
+  .page-orders,
+  .page-operations { --header-h: 112px; }
   .management-header__inner {
     grid-template-columns: auto minmax(0, 1fr) auto;
     gap: 0 20px;
@@ -88,9 +92,11 @@
     grid-column: 1 / -1;
     grid-row: 2;
     justify-self: stretch;
-    justify-content: space-between;
+    justify-content: flex-start;
     min-height: 55px;
     gap: 16px;
+    overflow-x: auto;
+    scrollbar-width: thin;
   }
   .management-nav a { font-size: .72rem; }
   .management-header__actions { grid-column: 3; grid-row: 1; }

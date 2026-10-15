@@ -22,8 +22,8 @@ const crumbs = items => ({ '@type': 'BreadcrumbList', itemListElement: items.map
 
 function head({ file, title, description, image = 'assets/images/social-cover.jpg', imageWidth = 1200, imageHeight = 630, graph, type = 'website' }) {
   const galleryStyles = file.startsWith('product-') ? '\n  <link rel="stylesheet" href="/assets/vendor/swiper/swiper-bundle.min.css?v=14.3.0" />\n  <link rel="stylesheet" href="/product-gallery.css?v=20261015-1" />' : '';
-  const galleryScripts = file.startsWith('product-') ? '\n  <script defer src="/assets/vendor/swiper/swiper-bundle.min.js?v=14.3.0"></script>\n  <script defer src="/product-gallery.js?v=20261015-1"></script>' : '';
-  const cmsVersion = file.startsWith('product-') ? '20261015-1' : '20261011-2';
+  const galleryScripts = file.startsWith('product-') ? '\n  <script defer src="/assets/vendor/swiper/swiper-bundle.min.js?v=14.3.0"></script>\n  <script defer src="/product-gallery.js?v=20261015-2"></script>' : '';
+  const cmsVersion = '20261015-2';
   return `<head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -56,8 +56,13 @@ function head({ file, title, description, image = 'assets/images/social-cover.jp
 </head>`;
 }
 
+function productImages(product) {
+  const sources = Array.isArray(product.images) && product.images.length ? product.images : [product.image, product.altImage];
+  return [...new Set(sources.filter(image => typeof image === 'string' && image.trim()))].slice(0, 10);
+}
+
 function productGallery(product) {
-  const images = [...new Set([product.image, product.altImage].filter(image => typeof image === 'string' && image.trim()))];
+  const images = productImages(product);
   const size = `width="${escape(product.width)}" height="${escape(product.height)}"`;
   const slides = images.map((image, index) => `<div class="swiper-slide${index === 0 ? ' is-gallery-active' : ''}"><img src="${escape(image)}" alt="${escape(product.title + (index === 0 ? '' : ' — другой ракурс'))}" ${size} ${index === 0 ? 'loading="eager" fetchpriority="high"' : 'loading="lazy"'} decoding="async" /></div>`).join('');
   const thumbs = images.map((image, index) => `<button class="product-gallery__thumb" type="button" data-gallery-thumb="${index}" aria-label="Показать фото ${index + 1}" aria-pressed="${index === 0}"><img src="${escape(image)}" alt="" ${size} loading="lazy" decoding="async" /></button>`).join('');
@@ -99,8 +104,8 @@ for (const product of products) {
   const description = `${product.description}; размеры ${product.sizes.join(', ')}`;
   const category = product.category === 'hoodie' ? 'Худи' : 'Футболки';
   // Demonstration prices are deliberately excluded from structured data.
-  const schemaProduct = { '@type': 'Product', '@id': `${url(product.url)}#product`, name: product.title, url: url(product.url), description: product.description, image: [url(product.image)], brand, category, color: colorNames[product.color], size: product.sizes };
-  const pageHead = head({ file: product.url, title, description, image: product.image, imageWidth: product.width, imageHeight: product.height, graph: [schemaProduct, { '@type': 'WebPage', '@id': `${url(product.url)}#page`, name: product.title, url: url(product.url), inLanguage: 'ru-RU', mainEntity: { '@id': schemaProduct['@id'] }, isPartOf: { '@id': website['@id'] } }, crumbs([['Главная', 'index.html'], ['Каталог', 'catalog.html'], [product.title, product.url]])] });
+  const schemaProduct = { '@type': 'Product', '@id': `${url(product.url)}#product`, name: product.title, url: url(product.url), description: product.description, image: productImages(product).map(url), brand, category, color: colorNames[product.color], size: product.sizes };
+  const pageHead = head({ file: product.url, title, description, image: productImages(product)[0] || product.image, imageWidth: product.width, imageHeight: product.height, graph: [schemaProduct, { '@type': 'WebPage', '@id': `${url(product.url)}#page`, name: product.title, url: url(product.url), inLanguage: 'ru-RU', mainEntity: { '@id': schemaProduct['@id'] }, isPartOf: { '@id': website['@id'] } }, crumbs([['Главная', 'index.html'], ['Каталог', 'catalog.html'], [product.title, product.url]])] });
   const sizes = product.sizes.map((size, i) => `<button type="button" data-size-choice="${size}" class="${i === 0 ? 'is-active' : ''}" aria-pressed="${i === 0}" aria-label="Размер ${size}">${size}</button>`).join('');
   const main = `  <main class="product-main" id="main-content" tabindex="-1">
     <div class="container">

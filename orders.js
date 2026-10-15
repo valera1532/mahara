@@ -3,6 +3,8 @@
   const $ = selector => document.querySelector(selector);
   const names = {pending:'Ожидает оплаты',payment_pending:'Ожидает оплаты',paid:'Оплачен',canceled:'Отменён',expired:'Время оплаты истекло',failed:'Ошибка оплаты',refunded:'Оплата возвращена',partial_refunded:'Частичный возврат',refund_pending:'Возврат обрабатывается'};
   const money = value => new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB'}).format(Number(value)/100);
+  const deepLink = new URL(location.href).searchParams;
+  const requestedOrder = /^[a-f0-9]{32}$/.test(deepLink.get('order') || '') ? deepLink.get('order') : null;
   let session, orders = [], refundOrder, refundRequestId, listGeneration = 0, searchTimer;
   let pagination = {page:1,pageSize:50,total:0,pages:1};
   function el(tag, className, text) { const node = document.createElement(tag); if(className) node.className=className; if(text!==undefined) node.textContent=text; return node; }
@@ -28,7 +30,7 @@
     $('[data-page-next]').disabled=pagination.page>=pagination.pages;
     if(!orders.length) { container.append(el('p','orders-empty',$('[data-search]').value.trim() || $('[data-filter]').value!=='all'?'Заказы по выбранным условиям не найдены.':'Заказов пока нет. Здесь появятся покупки с сайта.')); return; }
     for(const order of orders) {
-      const card=el('details','orders-card'); card.dataset.orderId=order.id; card.open=openIds.has(order.id);
+      const card=el('details','orders-card'); card.dataset.orderId=order.id; card.id=`order-${order.id}`; card.open=openIds.has(order.id) || requestedOrder===order.id;
       const summary=el('summary'); const heading=el('div'); heading.append(el('strong','',`Заказ ${order.number || order.id}`));
       const date=new Date(typeof order.createdAt==='number'?order.createdAt*1000:order.createdAt); heading.append(el('small','',Number.isNaN(date.getTime())?'':date.toLocaleString('ru-RU')));
       summary.append(heading,el('span',`orders-badge orders-badge--${Object.hasOwn(names,order.status)?order.status:'pending'}`,names[order.status]||order.status),el('b','',money(order.totalAmount)));
@@ -101,5 +103,6 @@
   $('[data-page-prev]').addEventListener('click',()=>load(pagination.page-1));
   $('[data-page-next]').addEventListener('click',()=>load(pagination.page+1));
   $('[data-logout]').addEventListener('click',async()=>{try{await write('/api/admin/logout',{});location.assign('/admin/login');}catch(error){errorMessage(error.message);}});
+  if (deepLink.has('q')) $('[data-search]').value=deepLink.get('q').slice(0,200);
   request('/api/admin/session').then(data=>{session=data;return load();}).catch(error=>errorMessage(error.message));
 })();

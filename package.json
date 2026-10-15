@@ -16,6 +16,8 @@
     "test:orders": "node tests/orders-browser.cjs",
     "test:cart": "node tests/cart-browser.cjs",
     "test:gallery": "node tests/product-gallery-browser.cjs",
+    "test:photos": "node tools/php.cjs tests/content-images.php && node tests/product-photos-browser.cjs",
+    "test:operations": "node tools/php.cjs tests/operations.php && node tests/operations-browser.cjs",
     "test:notifications": "node tools/php.cjs tests/notifications.php",
     "test:launch": "node tools/php.cjs tests/launch-readiness.php",
     "test:legal": "node tools/php.cjs tests/launch.php",

@@ -109,9 +109,10 @@ verify(value($xpath, $gallery . '//*[@data-gallery-current]') === '01' && value(
 verify((int) $xpath->evaluate('count(' . $gallery . '//button[@data-gallery-thumb])') === 2 && value($xpath, $gallery . '//button[@data-gallery-thumb="0"]/@aria-pressed') === 'true' && value($xpath, $gallery . '//button[@data-gallery-thumb="1"]/@aria-pressed') === 'false', 'Thumbnail selection matches the first slide.');
 verify(value($xpath, $gallery . '//button[@data-gallery-thumb="1"]/@aria-label') === 'Показать фото 2' && (int) $xpath->evaluate('count(' . $gallery . '//button[@data-gallery-thumb]/img[@alt=""])') === 2, 'Thumbnail controls have accessible labels and decorative images.');
 foreach (['/assets/vendor/swiper/swiper-bundle.min.css?v=14.3.0', '/product-gallery.css?v=20261015-1'] as $asset) verify((int) $xpath->evaluate('count(//head/link[@rel="stylesheet" and @href="' . $asset . '"])') === 1, 'Product gallery stylesheet is loaded once.');
-foreach (['/assets/vendor/swiper/swiper-bundle.min.js?v=14.3.0', '/product-gallery.js?v=20261015-1', 'cms-data.js?v=20261015-1'] as $asset) verify((int) $xpath->evaluate('count(//head/script[@defer and @src="' . $asset . '"])') === 1, 'Product gallery scripts use the matching cache version.');
+foreach (['/assets/vendor/swiper/swiper-bundle.min.js?v=14.3.0', '/product-gallery.js?v=20261015-2', 'cms-data.js?v=20261015-2'] as $asset) verify((int) $xpath->evaluate('count(//head/script[@defer and @src="' . $asset . '"])') === 1, 'Product gallery scripts use the matching cache version.');
 verify(strpos($detail, '/swiper-bundle.min.js?') < strpos($detail, '/product-gallery.js?') && strpos($detail, '/product-gallery.js?') < strpos($detail, 'cms-data.js?'), 'Gallery controller loads after its vendor and before the CMS repaint.');
 verify(!str_contains($home, 'swiper-bundle') && !str_contains($catalog, 'swiper-bundle'), 'Non-product pages do not load gallery dependencies.');
+verify(str_contains($home, 'cms-data.js?v=20261015-2') && str_contains($catalog, 'cms-data.js?v=20261015-2'), 'All public SSR pages load the multi-photo CMS normalizer.');
 verify((int) $xpath->evaluate('count(//*[@data-size-choice])') === 1, 'Dynamic product sizes are current.');
 $schema = json_decode(value($xpath, '//script[@type="application/ld+json"]'), true, 512, JSON_THROW_ON_ERROR);
 $schemaProducts = array_values(array_filter($schema['@graph'], static fn(array $node): bool => $node['@type'] === 'Product'));
@@ -125,6 +126,21 @@ verify(value($single, '(' . $slides . ')[1]/img/@src') === $product['image'] && 
 $missingAlt = $product; unset($missingAlt['altImage']);
 verify((int) document(mhRenderProductGallery($missingAlt))->evaluate('count(//div[' . hasClass('swiper-slide') . '])') === 1, 'An absent alternate image never creates an empty source.');
 
+$manyContent = $content;
+$photos = array_map(static fn(int $index): string => 'assets/uploads/gallery-' . $index . '.webp', range(1, 10));
+$manyContent['products'][0]['images'] = $photos;
+$manyHtml = renderPage('/product-new-product.html', $manyContent); $many = document($manyHtml);
+$renderedPhotos = []; foreach ($many->query($slides . '/img') as $image) $renderedPhotos[] = $image->getAttribute('src');
+verify($renderedPhotos === $photos && (int) $many->evaluate('count(' . $gallery . '//button[@data-gallery-thumb])') === 10, 'All ten canonical images appear as ordered slides and thumbnails.');
+verify(value($many, $gallery . '//*[@data-gallery-current]') === '01' && value($many, $gallery . '//*[@data-gallery-total]') === '10', 'Ten-image navigation has the correct total.');
+verify((int) $many->evaluate('count(' . $slides . '/img[@loading="eager" and @fetchpriority="high"])') === 1 && (int) $many->evaluate('count(' . $slides . '/img[@loading="lazy"])') === 9, 'Only the first of ten main images is eager.');
+$manySchema = json_decode(value($many, '//script[@type="application/ld+json"]'), true, 512, JSON_THROW_ON_ERROR);
+$manySchemaProduct = array_values(array_filter($manySchema['@graph'], static fn(array $node): bool => $node['@type'] === 'Product'))[0];
+verify($manySchemaProduct['image'] === array_map(static fn(string $photo): string => 'https://maharussia.ru/' . $photo, $photos), 'Product JSON-LD includes all unique canonical photos.');
+verify(value($many, '//meta[@property="og:image"]/@content') === 'https://maharussia.ru/' . $photos[0], 'The primary social image follows canonical photo ordering.');
+$canonicalSingle = $product; $canonicalSingle['images'] = [$photos[0], $photos[0]];
+verify((int) document(mhRenderProductGallery($canonicalSingle))->evaluate('count(//div[' . hasClass('swiper-slide') . '])') === 1, 'Renderer also deduplicates canonical photo URLs.');
+
 $defaults = json_decode((string) file_get_contents(dirname(__DIR__) . '/site-defaults.json'), true, 512, JSON_THROW_ON_ERROR);
 foreach ($defaults['products'] as $staticProduct) {
     $staticHtml = (string) file_get_contents(dirname(__DIR__) . '/' . $staticProduct['url']);
@@ -134,7 +150,7 @@ foreach ($defaults['products'] as $staticProduct) {
     verify($actualImages === $expectedImages, 'Static gallery uses unique images in published order: ' . $staticProduct['url']);
     verify((int) $static->evaluate('count(' . $gallery . '//button[@data-gallery-thumb])') === (count($expectedImages) > 1 ? count($expectedImages) : 0), 'Static single/multiple image controls match the slide count.');
     verify(value($static, '(' . $slides . ')[1]/img/@loading') === 'eager' && value($static, '(' . $slides . ')[1]/img/@fetchpriority') === 'high', 'Static first image keeps loading priority.');
-    verify(str_contains($staticHtml, '/swiper-bundle.min.css?v=14.3.0') && str_contains($staticHtml, '/product-gallery.css?v=20261015-1') && str_contains($staticHtml, 'cms-data.js?v=20261015-1') && strpos($staticHtml, '/swiper-bundle.min.js?') < strpos($staticHtml, '/product-gallery.js?') && strpos($staticHtml, '/product-gallery.js?') < strpos($staticHtml, 'cms-data.js?'), 'Static gallery dependencies load in the same order as SSR.');
+    verify(str_contains($staticHtml, '/swiper-bundle.min.css?v=14.3.0') && str_contains($staticHtml, '/product-gallery.css?v=20261015-1') && str_contains($staticHtml, '/product-gallery.js?v=20261015-2') && str_contains($staticHtml, 'cms-data.js?v=20261015-2') && strpos($staticHtml, '/swiper-bundle.min.js?') < strpos($staticHtml, '/product-gallery.js?') && strpos($staticHtml, '/product-gallery.js?') < strpos($staticHtml, 'cms-data.js?'), 'Static gallery dependencies load in the same order as SSR.');
 }
 
 $sitemap = renderPage('/sitemap.xml', $content);

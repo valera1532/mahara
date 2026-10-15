@@ -21,8 +21,11 @@ const PHP = process.env.PHP_BINARY || (fs.existsSync(bundledPHP) ? bundledPHP : 
 const defaults = JSON.parse(fs.readFileSync(path.join(ROOT, 'site-defaults.json'), 'utf8'));
 const multi = { ...defaults.products[0], id: 'gallery-dynamic-fixture', url: 'product-gallery-dynamic-fixture.html', title: 'Динамический товар для галереи', sizes: ['S', 'M'] };
 const single = { ...multi, id: 'gallery-single-fixture', url: 'product-gallery-single-fixture.html', title: 'Товар с одной фотографией', altImage: multi.image };
+const tenPhotos = [...new Set(defaults.products.flatMap(product => [product.image, product.altImage]))].slice(0, 10);
+assert.equal(tenPhotos.length, 10, 'Ten-photo fixture needs ten distinct real public assets');
+const many = { ...multi, id: 'gallery-ten-fixture', url: 'product-gallery-ten-fixture.html', title: 'Товар с десятью фотографиями', images: tenPhotos.slice(), image: tenPhotos[0], altImage: tenPhotos[1] };
 assert.notEqual(multi.image, multi.altImage, 'Two-photo fixture must contain different images');
-const fixture = { content: { ...structuredClone(defaults), products: [multi, single, structuredClone(defaults.products[0])], revision: 1 }, calls: [], forbidden: [] };
+const fixture = { content: { ...structuredClone(defaults), products: [multi, single, many, structuredClone(defaults.products[0])], revision: 1 }, calls: [], forbidden: [] };
 const errors = [];
 const GALLERY = '[data-product-gallery]';
 const SLIDES = '.product-gallery__viewport > .swiper-wrapper > .swiper-slide';
@@ -45,12 +48,14 @@ async function ready(page, id = multi.id) {
   await page.waitForFunction(id => window.MaharaCatalog?.products.some(product => product.id === id) && !document.querySelector('[data-product-detail] [data-add-cart]')?.disabled, id);
 }
 
-async function index(page, expected, label) {
+async function index(page, expected, label, product = multi) {
   await page.waitForFunction(expected => document.querySelector('[data-product-gallery]')?.dataset.galleryIndex === String(expected), expected);
+  await page.waitForFunction(() => { const image = document.querySelector('[data-product-gallery] :is(.swiper-slide-active, .is-gallery-active) img'); return image?.complete && image.naturalWidth > 0; });
   equal(await page.locator(`${GALLERY} [data-gallery-current]`).textContent(), String(expected + 1).padStart(2, '0'), `${label}: counter follows the displayed photo`);
   equal(await page.locator(`${GALLERY} [data-gallery-thumb][aria-pressed="true"]`).getAttribute('data-gallery-thumb'), String(expected), `${label}: exactly one matching thumbnail is selected`);
   equal(await page.locator(`${GALLERY} [data-gallery-thumb][aria-pressed="true"]`).count(), 1, `${label}: selection is accessible and unique`);
-  equal(await page.locator(`${GALLERY} :is(.swiper-slide-active, .is-gallery-active) img`).evaluate(image => new URL(image.getAttribute('src'), location.href).pathname), '/' + [multi.image, multi.altImage][expected].replace(/^\/+/, ''), `${label}: active slide contains the correct actual image`);
+  const photos = product.images || [...new Set([product.image, product.altImage])];
+  equal(await page.locator(`${GALLERY} :is(.swiper-slide-active, .is-gallery-active) img`).evaluate(image => new URL(image.getAttribute('src'), location.href).pathname), '/' + photos[expected].replace(/^\/+/, ''), `${label}: active slide contains the correct actual image`);
 }
 
 async function noOverflow(page, label, waitForFrames = true) {
@@ -132,7 +137,7 @@ async function run() {
       if (pathname === '/api/content') return send(200, JSON.stringify(fixture.content));
       if (pathname === '/api/catalog/availability') return send(200, JSON.stringify({ products: fixture.content.products.map(product => ({ id: product.id, variants: product.sizes.map(size => ({ size, status: 'available', maxQty: 5 })) })) }));
       if (pathname.startsWith('/api/')) { fixture.forbidden.push([request.method, pathname]); return send(503, '{}'); }
-      if ([`/${multi.url}`, `/${single.url}`].includes(pathname)) return send(200, render(pathname), 'text/html; charset=utf-8');
+      if ([multi, single, many].some(product => pathname === '/' + product.url)) return send(200, render(pathname), 'text/html; charset=utf-8');
       const relative = decodeURIComponent(pathname).replace(/^\/+/, '');
       const file = path.resolve(ROOT, relative);
       const allowed = relative === 'product-hoodie-black.html' || ['script.js', 'catalog-data.js', 'cms-data.js', 'product-gallery.js', 'product-gallery.css', 'styles.css'].includes(relative) || /^assets\/[a-zA-Z0-9._/-]+$/.test(relative);
@@ -221,7 +226,40 @@ async function run() {
       await mobile.close();
     }
 
-    console.log('Gallery: single photo, failed vendor and disabled JavaScript');
+    console.log('Gallery: ten published photos, reorder/reset and shrinking to one');
+    const ten = await desktop.newPage(); await ten.goto(`${origin}/${many.url}`); await ready(ten, many.id);
+    equal(await ten.locator(`${GALLERY} ${SLIDES}`).count(), 10, 'Actual SSR publishes all ten ordered photos');
+    equal(await ten.locator(`${GALLERY} [data-gallery-thumb]`).count(), 10, 'Each of ten photos has a usable thumbnail');
+    equal(await ten.locator(`${GALLERY} [data-gallery-total]`).textContent(), '10', 'Counter supports a two-digit total');
+    equal(await ten.locator(`${GALLERY} ${SLIDES} img`).evaluateAll(images => images.map(image => new URL(image.getAttribute('src'), location.href).pathname)), tenPhotos.map(source => '/' + source), 'SSR and client hydration preserve the complete canonical photo order');
+    await ten.locator(`${GALLERY} [data-gallery-thumb="9"]`).click(); await index(ten, 9, 'Tenth thumbnail', many);
+    await ten.locator(GALLERY).focus(); await ten.keyboard.press('Home'); await index(ten, 0, 'Ten-photo Home', many);
+    await ten.keyboard.press('End'); await index(ten, 9, 'Ten-photo End', many);
+    await noOverflow(ten, '1440px ten photos');
+    for (const width of [390, 320]) {
+      const tenContext = await context({ viewport: { width, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
+      const touchTen = await tenContext.newPage(); await touchTen.goto(`${origin}/${many.url}`); await ready(touchTen, many.id);
+      await touchTen.locator(`${GALLERY} [data-gallery-thumb="9"]`).tap(); await index(touchTen, 9, `${width}px tenth photo`, many);
+      await noOverflow(touchTen, `${width}px ten thumbnails`);
+      await swipe(touchTen, 'right'); await index(touchTen, 8, `${width}px tenth-to-ninth swipe`, many);
+      await swipe(touchTen, 'left'); await index(touchTen, 9, `${width}px ninth-to-tenth swipe`, many);
+      await tenContext.close();
+    }
+    many.images = [many.images[9], ...many.images.slice(0, 9)]; many.image = many.images[0]; many.altImage = many.images[1]; many.title = 'Новый порядок десяти фотографий'; fixture.content.revision++;
+    await ten.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await ten.locator('#product-title').filter({ hasText: many.title }).waitFor();
+    await index(ten, 0, 'Reordering ten photos resets the current image', many);
+    equal(await ten.locator(`${GALLERY} ${SLIDES} img`).evaluateAll(images => images.map(image => new URL(image.getAttribute('src'), location.href).pathname)), many.images.map(source => '/' + source), 'CMS reorder updates every slide, not only the first two aliases');
+    await ten.locator(`${GALLERY} [data-gallery-thumb="9"]`).click(); await index(ten, 9, 'Tenth photo after reorder', many);
+    many.images = [many.images[0]]; many.image = many.altImage = many.images[0]; many.title = 'После удаления осталась одна фотография'; fixture.content.revision++;
+    await ten.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await ten.locator('#product-title').filter({ hasText: many.title }).waitFor();
+    await ten.waitForFunction(() => document.querySelector('[data-product-gallery]')?.dataset.galleryMode === 'single');
+    equal(await ten.locator(`${GALLERY} ${SLIDES}`).count(), 1, 'Removing nine photos rebuilds an existing ten-photo gallery as a single image');
+    equal(await ten.locator(`${GALLERY} [data-gallery-thumb], ${GALLERY} [data-gallery-current], ${GALLERY} [data-gallery-next]`).count(), 0, 'Shrinking to one removes stale thumbnails, counter and navigation');
+    equal(await ten.locator(GALLERY).getAttribute('data-gallery-index'), '0', 'An old tenth-photo index cannot survive a single-image update');
+
+    console.log('Gallery: legacy single photo, failed vendor and disabled JavaScript');
     const one = await desktop.newPage(); await one.goto(`${origin}/${single.url}`); await ready(one, single.id);
     equal(await one.locator(`${GALLERY} ${SLIDES}`).count(), 1, 'Identical primary/alternate URLs produce one photo');
     equal(await one.locator(`${GALLERY} [data-gallery-prev], ${GALLERY} [data-gallery-next], ${GALLERY} [data-gallery-thumb], ${GALLERY} [data-gallery-current]`).count(), 0, 'A single photo has no nonfunctional navigation or counter');
@@ -254,7 +292,7 @@ async function run() {
     const previewContext = await context({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
     const preview = await previewContext.newPage(); await preview.goto(`${origin}/product-hoodie-black.html`); await ready(preview, 'hoodie-black');
     await preview.screenshot({ path: path.join(previews, 'product-gallery-mobile.png'), fullPage: false, animations: 'disabled' });
-    console.log(`PASS: ${checks} product-gallery browser checks (actual SSR, static markup, touch, keyboard, thumbnails, reduced motion, CMS refresh, cart, single photo, vendor failure, no-JS, 320/390/1440px)`);
+    console.log(`PASS: ${checks} product-gallery browser checks (actual SSR, ten photos/order/reset, legacy static markup, touch, keyboard, thumbnails, reduced motion, CMS refresh, cart, single photo, vendor failure, no-JS, 320/390/1440px)`);
   } finally { for (const value of contexts) await value.close().catch(() => {}); if (browser) await browser.close(); await new Promise(resolve => server.close(resolve)); }
 }
 run().catch(error => { console.error(error.stack || error); process.exitCode = 1; });

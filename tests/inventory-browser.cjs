@@ -14,6 +14,7 @@ const { setTimeout: delay } = require('node:timers/promises');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'C:/Users/valer/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
 
 const ROOT = path.resolve(__dirname, '..');
+const PREVIEWS = path.join(ROOT, '.local', 'inventory-browser-preview');
 const bundledPHP = path.join(ROOT, '.runtime', 'php', 'php.exe');
 const PHP = process.env.PHP_BINARY || (fs.existsSync(bundledPHP) ? bundledPHP : 'php');
 const USERNAME = 'inventory-test-owner';
@@ -98,6 +99,7 @@ function csvRows(text) {
 
 async function run() {
   const privateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mahara-inventory-browser-'));
+  fs.mkdirSync(PREVIEWS, { recursive: true });
   let server;
   let browser;
   let serverOutput = '';
@@ -105,10 +107,17 @@ async function run() {
     const port = await unusedPort();
     const origin = `http://127.0.0.1:${port}`;
     const env = { ...process.env, APP_ENV: 'development', APP_ORIGIN: origin, DATA_DIR: privateDir, MAHARA_ADMIN_USERNAME: USERNAME, MAHARA_ADMIN_PASSWORD: PASSWORD };
-    const created = spawnSync(PHP, [path.join(ROOT, 'tools/admin.php'), 'create'], { cwd: ROOT, env, encoding: 'utf8', windowsHide: true });
+    // Explicit fixture configuration takes precedence before app.php can read
+    // config.local.php. Both the account and HTTP server use disposable storage.
+    const fixtureConfig = Buffer.from(JSON.stringify({ root: ROOT, data_dir: privateDir, origin, production: false, trust_proxy: false, payments: { enabled: false }, shipping: { enabled: false }, mail: { enabled: false } })).toString('base64');
+    const fixtureRoot = Buffer.from(ROOT).toString('base64');
+    const fixtureBootstrap = `$GLOBALS['mahara_app_test_config']=json_decode(base64_decode('${fixtureConfig}'),true,512,JSON_THROW_ON_ERROR);$GLOBALS['mahara_payments_test_secrets']=['terminal_key'=>'','password'=>''];$GLOBALS['mahara_shipping_test_secrets']=['account'=>'','password'=>''];$GLOBALS['mahara_mail_test_secrets']=['username'=>'','password'=>''];$fixtureRoot=base64_decode('${fixtureRoot}');`;
+    const created = spawnSync(PHP, ['-r', fixtureBootstrap + `$argv=[__FILE__,'create'];require $fixtureRoot.'/tools/admin.php';`], { cwd: ROOT, env, encoding: 'utf8', windowsHide: true });
     equal(created.status, 0, `Create isolated administrator: ${created.stderr || created.error || ''}`);
     check(!created.stdout.includes(PASSWORD), 'Account CLI must not disclose its password');
-    server = spawn(PHP, ['-S', `127.0.0.1:${port}`, '-t', ROOT, path.join(ROOT, 'server/router.php')], { cwd: ROOT, env, stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
+    const router = path.join(privateDir, 'inventory-browser-router.php');
+    fs.writeFileSync(router, `<?php define('MAHARA_LIBRARY_ONLY',true);${fixtureBootstrap}require $fixtureRoot.'/server/app.php';mahara_dispatch();`);
+    server = spawn(PHP, ['-S', `127.0.0.1:${port}`, '-t', ROOT, router], { cwd: ROOT, env, stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
     let spawnError;
     server.on('error', error => { spawnError = error; });
     server.stderr.on('data', chunk => { serverOutput = (serverOutput + chunk).slice(-10000); });
@@ -204,8 +213,11 @@ async function run() {
     check(!('low' in data.summary), 'Summary has no replenishment count');
     equal(data.movements.map(item => [item.type, item.quantity, item.before, item.after, item.actor]), [['set', 0, 3, 0, USERNAME], ['writeoff', 2, 5, 3, USERNAME], ['receipt', 5, null, 5, USERNAME]], 'History preserves unknown/known before balances, the actor and every movement in reverse order');
     check(data.movements[0].note.includes('фактически пусто'), 'History preserves recount reasons');
-    equal(await page.locator('[data-movement-list] tbody tr').count(), 3, 'Browser history displays all three operations');
-    check((await page.locator('[data-movement-list]').textContent()).includes('Инвентаризация: фактически пусто'), 'History displays the saved note as text');
+    check(await page.locator('.inventory-history-link a[href="/operations.html"]').isVisible(), 'Inventory links to the dedicated operations journal');
+    equal(await page.locator('[data-movement-list]').count(), 0, 'Inventory no longer duplicates the old history table');
+    const journal = await (await request('/api/admin/operations')).json();
+    equal(journal.pagination.total, 3, 'The dedicated operations API includes all three inventory movements');
+    check(journal.entries.some(entry => entry.comment.includes('Инвентаризация: фактически пусто')), 'The dedicated journal preserves the saved recount note');
     await page.reload({ waitUntil: 'load' });
     await inventoryReady(page);
     await quantity(page, target.id, size, '0 шт.');
@@ -362,18 +374,18 @@ async function run() {
     await noOverflow(page, 'Desktop 1440px');
     await page.waitForFunction(() => !document.querySelector('[data-toast]').textContent.trim());
     await page.evaluate(() => window.scrollTo(0, 0));
-    await page.screenshot({ path: path.join(ROOT, 'preview/inventory-desktop.png'), fullPage: false });
+    await page.screenshot({ path: path.join(PREVIEWS, 'inventory-desktop.png'), fullPage: false });
     for (const width of [390, 360]) {
       await page.setViewportSize({ width, height: 844 });
       await noOverflow(page, `Inventory ${width}px`);
       await page.locator('[data-search]').fill(target.id);
       await page.evaluate(() => { document.activeElement?.blur(); window.scrollTo(0, 0); });
-      await page.screenshot({ path: path.join(ROOT, `preview/inventory-mobile-${width}.png`), fullPage: true });
+      await page.screenshot({ path: path.join(PREVIEWS, `inventory-mobile-${width}.png`), fullPage: true });
       await row(page, target.id, size).locator('[data-action="receipt"]').click();
       await noOverflow(page, `Inventory dialog ${width}px`);
       const dialog = await page.locator('[data-movement-dialog]').boundingBox();
       check(dialog.x >= -1 && dialog.x + dialog.width <= width + 1, `${width}px: movement dialog fits the viewport`);
-      if (width === 360) await page.screenshot({ path: path.join(ROOT, 'preview/inventory-dialog-mobile.png'), fullPage: false });
+      if (width === 360) await page.screenshot({ path: path.join(PREVIEWS, 'inventory-dialog-mobile.png'), fullPage: false });
       await closeMovement(page);
       await page.locator('[data-clear-filters]').click();
     }
@@ -382,7 +394,7 @@ async function run() {
     equal(externalRequests, [], 'Inventory does not depend on external requests');
     await context.close();
     console.log(`PASS: ${checks} inventory checks (HTTP guards, persistent workflow, stale tabs, nonnegative stock, filters, CSV, archives, responsive UI)`);
-    console.log('Screenshots: preview/inventory-desktop.png, preview/inventory-mobile-390.png, preview/inventory-mobile-360.png, preview/inventory-dialog-mobile.png');
+    console.log('Screenshots: .local/inventory-browser-preview/inventory-{desktop,mobile-390,mobile-360,dialog-mobile}.png');
   } catch (error) {
     if (serverOutput.includes('PHP Fatal error') || serverOutput.includes('MAHARA backend error')) console.error(serverOutput);
     throw error;

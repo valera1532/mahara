@@ -14,6 +14,7 @@ const { setTimeout: delay } = require('node:timers/promises');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'C:/Users/valer/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
 
 const ROOT = path.resolve(__dirname, '..');
+const PREVIEWS = path.join(ROOT, '.local', 'cms-browser-preview');
 const bundledPHP = path.join(ROOT, '.runtime', 'php', 'php.exe');
 const PHP = process.env.PHP_BINARY || (fs.existsSync(bundledPHP) ? bundledPHP : 'php');
 const USERNAME = 'cms-browser-owner';
@@ -63,13 +64,14 @@ async function imageLoaded(page, selector, source) {
 }
 
 async function upload(page, key, filename) {
+  const photoIndex = await page.locator('[data-cms-photo-item]').count();
   const responsePromise = page.waitForResponse(response => response.url().endsWith('/api/admin/uploads') && response.request().method() === 'POST');
-  await page.locator(`[data-cms-upload="${key}"]`).setInputFiles(path.join(ROOT, 'assets/images', filename));
+  await page.locator('[data-cms-upload="images"]').setInputFiles(path.join(ROOT, 'assets/images', filename));
   const response = await responsePromise;
   equal(response.status(), 201, `${key}: upload endpoint accepts prepared image bytes`);
   const { url } = await response.json();
   check(/^assets\/uploads\/[a-f0-9]{32}\.(?:webp|png|jpg)$/.test(url), `${key}: API returns a durable upload URL`);
-  await imageLoaded(page, `[data-cms-field-image="${key}"]`, url);
+  await imageLoaded(page, `[data-cms-photo-item][data-cms-photo-index="${photoIndex}"] img`, url);
   await page.locator('[data-cms-workspace][aria-busy="false"]').waitFor();
   return url;
 }
@@ -99,12 +101,13 @@ async function noOverflow(page, label) {
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   const dimensions = await page.evaluate(() => ({ viewport: innerWidth, document: document.documentElement.scrollWidth }));
   const overflow = dimensions.document > dimensions.viewport + 1 ? await page.evaluate(() => Array.from(document.querySelectorAll('body *')).filter(node => !node.closest('.cms-list')).map(node => ({ tag: node.tagName, class: node.className, right: Math.round(node.getBoundingClientRect().right), width: Math.round(node.getBoundingClientRect().width), scroll: node.scrollWidth })).filter(node => node.right > innerWidth + 1 || node.scroll > node.width + 5).slice(0, 12)) : [];
-  if (overflow.length) await page.screenshot({ path: path.join(ROOT, 'preview/admin-overflow-debug.png'), fullPage: false });
+  if (overflow.length) await page.screenshot({ path: path.join(PREVIEWS, 'admin-overflow-debug.png'), fullPage: false });
   check(dimensions.document <= dimensions.viewport + 1, `${label}: no horizontal overflow ${JSON.stringify({ ...dimensions, overflow })}`);
 }
 
 async function run() {
   const privateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mahara-cms-browser-'));
+  fs.mkdirSync(PREVIEWS, { recursive: true });
   let server;
   let browser;
   let serverOutput = '';
@@ -113,10 +116,17 @@ async function run() {
     check(port !== 8000, 'The developer preview port is not used');
     const origin = `http://127.0.0.1:${port}`;
     const env = { ...process.env, APP_ENV: 'development', APP_ORIGIN: origin, DATA_DIR: privateDir, MAHARA_ADMIN_USERNAME: USERNAME, MAHARA_ADMIN_PASSWORD: PASSWORD };
-    const account = spawnSync(PHP, [path.join(ROOT, 'tools/admin.php'), 'create'], { cwd: ROOT, env, encoding: 'utf8', windowsHide: true });
+    // Both CLI provisioning and HTTP dispatch must bypass config.local.php,
+    // whose explicit settings otherwise override the disposable environment.
+    const fixtureConfig = Buffer.from(JSON.stringify({ root: ROOT, data_dir: privateDir, origin, production: false, trust_proxy: false, payments: { enabled: false }, shipping: { enabled: false }, mail: { enabled: false } })).toString('base64');
+    const fixtureRoot = Buffer.from(ROOT).toString('base64');
+    const fixtureBootstrap = `$GLOBALS['mahara_app_test_config']=json_decode(base64_decode('${fixtureConfig}'),true,512,JSON_THROW_ON_ERROR);$GLOBALS['mahara_payments_test_secrets']=['terminal_key'=>'','password'=>''];$GLOBALS['mahara_shipping_test_secrets']=['account'=>'','password'=>''];$GLOBALS['mahara_mail_test_secrets']=['username'=>'','password'=>''];$fixtureRoot=base64_decode('${fixtureRoot}');`;
+    const account = spawnSync(PHP, ['-r', fixtureBootstrap + `$argv=[__FILE__,'create'];require $fixtureRoot.'/tools/admin.php';`], { cwd: ROOT, env, encoding: 'utf8', windowsHide: true });
     equal(account.status, 0, `Isolated administrator is provisioned: ${account.stderr || account.error || ''}`);
     check(!account.stdout.includes(PASSWORD), 'Account provisioning never prints the password');
-    server = spawn(PHP, ['-S', `127.0.0.1:${port}`, '-t', ROOT, path.join(ROOT, 'server/router.php')], { cwd: ROOT, env, stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
+    const router = path.join(privateDir, 'cms-browser-router.php');
+    fs.writeFileSync(router, `<?php define('MAHARA_LIBRARY_ONLY',true);${fixtureBootstrap}require $fixtureRoot.'/server/app.php';mahara_dispatch();`);
+    server = spawn(PHP, ['-S', `127.0.0.1:${port}`, '-t', ROOT, router], { cwd: ROOT, env, stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
     let spawnError;
     server.on('error', error => { spawnError = error; });
     server.stderr.on('data', chunk => { serverOutput = (serverOutput + chunk).slice(-10000); });
@@ -173,7 +183,7 @@ async function run() {
     equal(await page.locator('.cms-topbar .search-trigger, .cms-topbar [aria-label="Личный кабинет"]').count(), 0, 'Admin header has no removed icons');
     const adminNavigation = await page.locator('header nav a').allTextContents();
     check(await page.locator('header [data-cms-logout]').isVisible(), 'Shared editor header exposes sign out');
-    equal(adminNavigation.map(text => text.trim()), ['Заказы', 'Контент и товары', 'Склад', 'Витрина ↗'], 'Shared header exposes the same management sections');
+    equal(adminNavigation.map(text => text.trim()).sort(), ['Заказы', 'Операции', 'Контент и товары', 'Склад', 'Витрина ↗'].sort(), 'Shared header exposes every management section');
     equal(await page.locator('header [aria-current="page"]').getAttribute('href'), '/admin.html', 'Content header marks the current section');
 
     console.log('CMS: warehouse creation can be abandoned without form validation');
@@ -228,7 +238,7 @@ async function run() {
     check(/^item-[a-f0-9-]{36}$/.test(productId), 'New product gets a persistent UUID identifier');
     equal((await snapshot()).products.length, initial.products.length, 'A blank draft is never published automatically');
     check(await page.locator('[data-cms-save]').isDisabled(), 'A blank new product cannot save');
-    check((await page.locator('[data-cms-field-error="image"]').textContent()).includes('Загрузите'), 'A new product requires a primary photo');
+    check((await page.locator('[data-cms-field-error="images"]').textContent()).trim().length > 0, 'A new product requires at least one photo');
     const productTitle = 'Тестовая футболка MAHARA & Art';
     const productDescription = 'Плотный хлопок. Проверка новой коллекции и второго ракурса.';
     const productFacts = {composition:'100% хлопок (тестовые данные)',care:'Бережная стирка\nНе отбеливать',manufacturer:'Тестовый изготовитель, Россия',measurements:'<img id="facts-xss-probe" src=x>\nM: длина 70 см, ширина 56 см'};
@@ -260,24 +270,24 @@ async function run() {
     await page.route('**/api/admin/uploads', async route => { announceUpload(); await uploadGate; await route.continue(); });
     const mainUpload = upload(page, 'image', 'hero-woman.webp');
     await uploadStarted;
-    for (const selector of ['[data-cms-save]', '[data-cms-reset]', '[data-cms-add-product]', '[data-cms-logout]', '[data-cms-image-reset="image"]', '[data-cms-select="section:hero"]']) {
+    for (const selector of ['[data-cms-save]', '[data-cms-reset]', '[data-cms-add-product]', '[data-cms-logout]', '[data-cms-photos-reset]', '[data-cms-select="section:hero"]']) {
       check(await page.locator(selector).isDisabled(), `${selector}: frozen while upload is pending`);
     }
     releaseUpload();
     await mainUpload;
     await page.unroute('**/api/admin/uploads');
-    await page.locator('[data-cms-image-reset="image"]').click();
-    equal(await page.locator('[data-cms-field-image="image"]').getAttribute('src'), null, 'Restoring a new product photo clears it without a missing-baseline exception');
+    await page.locator('[data-cms-photos-reset]').click();
+    equal(await page.locator('[data-cms-photo-item]').count(), 0, 'Restoring a new product photo collection clears it without a missing-baseline exception');
     check(await page.locator('[data-cms-save]').isDisabled(), 'Removing the primary photo makes the new product invalid again');
     const mainImage = await upload(page, 'image', 'hero-woman.webp');
     await imageLoaded(page, '[data-cms-preview] .cms-mini-product__photo img', mainImage);
-    await page.locator('[data-cms-upload="altImage"]').setInputFiles({ name: 'broken.webp', mimeType: 'image/webp', buffer: Buffer.from('RIFF0000WEBPinvalid-image') });
-    await page.waitForFunction(() => document.querySelector('[data-cms-field-error="altImage"]')?.textContent.includes('Фото не изменено'));
-    check(await page.locator('[data-cms-image-reset="altImage"]').isEnabled(), 'An optional failed upload can be cleared even without a saved photo');
-    await page.locator('[data-cms-image-reset="altImage"]').click();
-    equal((await page.locator('[data-cms-field-error="altImage"]').textContent()).trim(), '', 'Removing a failed optional upload clears its validation error');
+    await page.locator('[data-cms-upload="images"]').setInputFiles({ name: 'broken.webp', mimeType: 'image/webp', buffer: Buffer.from('RIFF0000WEBPinvalid-image') });
+    await page.waitForFunction(() => document.querySelector('[data-cms-field-error="images"]')?.textContent.trim().length > 0);
+    check(await page.locator('[data-cms-photo-error-dismiss]').isEnabled(), 'A failed additional upload can be acknowledged while preserving the current photo');
+    await page.locator('[data-cms-photo-error-dismiss]').click();
+    equal((await page.locator('[data-cms-field-error="images"]').textContent()).trim(), '', 'Keeping the previous photos clears the failed batch error');
     const altImage = await upload(page, 'altImage', 'black-hoodie.webp');
-    await page.locator('[data-cms-preview-photo="altImage"]').click();
+    await page.locator('[data-cms-photo-preview="1"]').click();
     await imageLoaded(page, '[data-cms-preview] .cms-mini-product__photo img', altImage);
     for (const source of [mainImage, altImage]) {
       const image = await context.request.get(origin + '/' + source);
@@ -317,8 +327,9 @@ async function run() {
     equal(await detail.locator('#facts-xss-probe').count(), 0, 'Product facts cannot inject markup');
     equal((await detail.locator('.product-detail__price').textContent()).replace(/\s/g, ''), '13579₽', 'Product page displays the integer price');
     equal(await detail.locator('[data-product-detail] [data-size-choice]').allTextContents(), ['XS', 'M', 'XL'], 'Product page displays the saved sizes');
-    await imageLoaded(detail, '.product-detail__gallery img:first-child', mainImage);
-    await imageLoaded(detail, '.product-detail__gallery img:nth-child(2)', altImage);
+    await imageLoaded(detail, '.product-gallery__viewport .swiper-slide:nth-child(1) > img', mainImage);
+    await detail.locator('[data-gallery-thumb="1"]').click();
+    await imageLoaded(detail, '.product-gallery__viewport .swiper-slide:nth-child(2) > img', altImage);
     check((await detail.title()).includes(productTitle), 'Product title reaches page metadata');
     check((await detail.locator('meta[name="description"]').getAttribute('content')).includes(productDescription), 'Product description reaches search metadata');
     check((await detail.locator('link[rel="canonical"]').getAttribute('href')).endsWith('/' + product.url), 'Canonical URL follows the generated URL');
@@ -333,11 +344,12 @@ async function run() {
     await editorReady(page);
     equal(await page.locator('[data-cms-field="title"]').inputValue(), productTitle, 'Product query opens the persisted editor after reload');
     for (const [key,value] of Object.entries(productFacts)) equal(await page.locator(`[data-cms-field="${key}"]`).inputValue(), value, `${key}: editor restores saved factual content`);
-    await imageLoaded(page, '[data-cms-field-image="image"]', mainImage);
-    await imageLoaded(page, '[data-cms-field-image="altImage"]', altImage);
+    await imageLoaded(page, '[data-cms-photo-item][data-cms-photo-index="0"] img', mainImage);
+    await imageLoaded(page, '[data-cms-photo-item][data-cms-photo-index="1"] img', altImage);
     await upload(page, 'image', 'black-hoodie.webp');
-    await page.locator('[data-cms-image-reset="image"]').click();
-    await imageLoaded(page, '[data-cms-field-image="image"]', mainImage);
+    await page.locator('[data-cms-photos-reset]').click();
+    await imageLoaded(page, '[data-cms-photo-item][data-cms-photo-index="0"] img', mainImage);
+    equal(await page.locator('[data-cms-photo-item]').count(), 2, 'Photo restore removes the unsaved addition and restores the saved collection');
     check(await page.locator('[data-cms-save]').isDisabled(), 'Photo restore returns an existing product to its saved baseline');
     await page.locator('[data-cms-add-product]').click();
     await page.locator('[data-cms-field="title"]').fill('Несохранённый товар');
@@ -379,9 +391,9 @@ async function run() {
     await stale.close();
     await page.goto(origin + '/admin.html?product=' + productId, { waitUntil: 'load' });
     await editorReady(page);
-    fs.mkdirSync(path.join(ROOT, 'preview'), { recursive: true });
+    fs.mkdirSync(PREVIEWS, { recursive: true });
     await noOverflow(page, 'Admin desktop');
-    await page.screenshot({ path: path.join(ROOT, 'preview/admin-secure.png'), fullPage: false });
+    await page.screenshot({ path: path.join(PREVIEWS, 'admin-secure.png'), fullPage: false });
     for (const width of [390, 360, 320]) {
       await page.setViewportSize({ width, height: 844 });
       await noOverflow(page, `Admin ${width}px`);
@@ -390,7 +402,7 @@ async function run() {
       check(bounds[0].right <= bounds[1].left + 1, `${width}px: brand and administration actions do not overlap`);
       check(bounds[1].right <= width, `${width}px: administration actions fit on screen`);
       check(await header.locator('a[href="/inventory.html"]').isVisible(), `${width}px: warehouse link remains available`);
-      if (width === 390) await page.screenshot({ path: path.join(ROOT, 'preview/admin-secure-mobile.png'), fullPage: false });
+      if (width === 390) await page.screenshot({ path: path.join(PREVIEWS, 'admin-secure-mobile.png'), fullPage: false });
     }
     await page.goto(origin + '/admin.html?product=unknown-product', { waitUntil: 'load' });
     await editorReady(page);
@@ -405,7 +417,7 @@ async function run() {
     equal(externalRequests, [], 'Editor and storefront have no external runtime dependencies');
     await context.close();
     console.log(`PASS: ${checks} CMS checks (UI login, product creation, real uploads, undo, persistence, SSR/SEO, conflicts, mobile layout, logout)`);
-    console.log('Screenshots: preview/admin-secure.png, preview/admin-secure-mobile.png');
+    console.log('Screenshots: .local/cms-browser-preview/admin-secure.png, .local/cms-browser-preview/admin-secure-mobile.png');
   } catch (error) {
     if (serverOutput.includes('PHP Fatal error') || serverOutput.includes('MAHARA backend error')) console.error(serverOutput);
     throw error;

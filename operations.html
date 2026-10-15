@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#080809" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>Операции — MAHARA</title>
+  <link rel="icon" href="/assets/icons/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/styles.css?v=20261011-2" />
+  <link rel="stylesheet" href="/management.css?v=20261015-2" />
+  <link rel="stylesheet" href="/operations.css?v=20261015-2" />
+  <script defer src="/operations.js?v=20261015-2"></script>
+</head>
+<body class="page-operations">
+  <a class="skip-link" href="#main-content">Перейти к содержимому</a>
+  <header class="management-header">
+    <div class="management-header__inner">
+      <a class="brand" href="/admin.html" aria-label="MAHARA — управление"><svg class="brand__icon" viewBox="0 0 64 64" aria-hidden="true"><path d="M14 50V32l8-8 5 5V17l5-7 5 7v12l5-5 8 8v18M8 50h48M22 50V35M32 50V21M42 50V35" /></svg><span>MAHARA</span></a>
+      <span class="management-header__label">Управление</span>
+      <nav class="management-nav" aria-label="Разделы управления">
+        <a href="/admin.html">Контент и товары</a><a href="/inventory.html">Склад</a><a href="/orders.html">Заказы</a><a href="/operations.html" aria-current="page">Операции</a><a href="/catalog.html">Витрина ↗</a>
+      </nav>
+      <div class="management-header__actions"><button class="management-logout" type="button" data-logout disabled>Выйти</button></div>
+    </div>
+  </header>
+  <main class="operations-main" id="main-content" tabindex="-1">
+    <div class="operations-intro"><div><p class="eyebrow">Управление / Движение товара</p><h1>Операции <em>магазина</em></h1><p>Приходы, заказы, списания и корректировки остатков.</p></div><button class="operations-button" type="button" data-refresh>Обновить</button></div>
+    <noscript><p class="operations-error">Для просмотра журнала включите JavaScript.</p></noscript>
+    <div class="operations-filters">
+      <label for="operations-search">Поиск по товару, артикулу, заказу или комментарию<input id="operations-search" type="search" data-search autocomplete="off" maxlength="200" placeholder="Название или номер заказа" /></label>
+      <label for="operations-kind">Тип операции<select id="operations-kind" data-kind><option value="all">Все операции</option><option value="receipt">Приходы</option><option value="order">Заказы</option><option value="writeoff">Списания</option><option value="set">Корректировки</option></select></label>
+    </div>
+    <p class="operations-status" data-status role="status" aria-live="polite">Загружаем журнал…</p>
+    <p class="operations-error" data-error role="alert" hidden></p>
+    <div class="operations-table-wrap" tabindex="0" role="region" aria-label="Журнал операций, таблицу можно прокручивать горизонтально">
+      <table class="operations-table"><caption class="sr-only">Приходы и заказы магазина</caption><thead><tr><th scope="col">Когда / Кто</th><th scope="col">Операция</th><th scope="col">Товар / Размер</th><th scope="col">Было → Стало</th><th scope="col">Комментарий / Заказ</th></tr></thead><tbody data-entries></tbody></table>
+    </div>
+    <p class="operations-empty" data-empty hidden>Операций по выбранным условиям нет.</p>
+    <nav class="operations-pagination" aria-label="Страницы операций"><button class="operations-button" type="button" data-page-prev disabled>Назад</button><span data-page-info></span><button class="operations-button" type="button" data-page-next disabled>Далее</button></nav>
+  </main>
+</body>
+</html>

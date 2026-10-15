@@ -20,6 +20,8 @@
   const logoutButton = $('[data-cms-logout]');
   const leaveDialog = $('[data-cms-leave-dialog]');
   const addProductButton = $('[data-cms-add-product]');
+  const MAX_PRODUCT_PHOTOS = 10;
+  const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
   const allowedSizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
   const categories = [['hoodie', 'Худи'], ['tee', 'Футболка']];
   const colors = [['black', 'Чёрный'], ['green', 'Зелёный'], ['burgundy', 'Бордовый'], ['slate', 'Графитовый'], ['white', 'Белый']];
@@ -36,8 +38,7 @@
     { key: 'manufacturer', label: 'Изготовитель и страна производства', type: 'textarea', maxLength: 2000 },
     { key: 'measurements', label: 'Замеры и посадка', type: 'textarea', maxLength: 2000 },
     { key: 'sizes', label: 'Доступные размеры', type: 'sizes' },
-    { key: 'image', label: 'Основная фотография', type: 'image' },
-    { key: 'altImage', label: 'Второй ракурс', type: 'image' }
+    { key: 'images', label: 'Фотографии товара', type: 'images' }
   ];
   let draft;
   let baseline;
@@ -49,14 +50,16 @@
   let uploads = 0;
   let navigatingAway = false;
   let savedMessage = 'Все изменения сохранены';
-  let previewPhoto = 'image';
+  let previewPhoto = 0;
+  let uploadProgress = '';
+  const photoDimensions = new Map();
   const uploadErrors = new Map();
   let pendingDeparture;
 
   function blankProduct(id) {
     return {
       id, url: `product-${id}.html`, title: '', subtitle: '', category: 'hoodie', color: 'black',
-      price: '', sizes: ['S', 'M', 'L', 'XL'], image: '', altImage: '', label: '', description: '',
+      price: '', sizes: ['S', 'M', 'L', 'XL'], images: [], image: '', altImage: '', label: '', description: '',
       composition: '', care: '', manufacturer: '', measurements: '', width: 1200, height: 1500
     };
   }
@@ -74,7 +77,7 @@
     }
     if (error?.status === 409) return 'Сайт уже изменён в другой вкладке. Скопируйте свои правки и обновите страницу, чтобы загрузить актуальную версию.';
     if (error?.status === 403) return 'Не удалось подтвердить доступ. Обновите страницу и попробуйте снова.';
-    if (error?.status === 413) return 'Файл слишком большой. Выберите фотографию до 10 МБ.';
+    if (error?.status === 413) return 'Файл слишком большой. Выберите фотографию до 8 МБ.';
     if (error?.status === 429) return 'Слишком много запросов. Подождите немного и попробуйте снова.';
     if (error?.status >= 400 && error?.status < 500 && error.message) return error.message;
     if (error?.name === 'TypeError') return 'Нет связи с сервером. Проверьте подключение и попробуйте снова.';
@@ -99,6 +102,30 @@
 
   const fieldPath = (key, target = selection) => `${target.type}:${target.id}:${key}`;
   const sameValue = (a, b) => Array.isArray(a) ? JSON.stringify(a) === JSON.stringify(b) : a === b;
+
+  function productPhotos(product) {
+    if (!product) return [];
+    return Array.isArray(product.images) ? [...product.images] : [...new Set([product.image, product.altImage].filter(Boolean))];
+  }
+
+  function validPhotoPath(value) {
+    return typeof value === 'string' && /^assets\/(?:images|uploads)\/[a-zA-Z0-9][a-zA-Z0-9._-]{0,199}\.(?:webp|png|jpe?g)$/.test(value) && !value.includes('..');
+  }
+
+  function setProductPhotos(product, photos) {
+    product.images = [...photos];
+    product.image = photos[0] || '';
+    product.altImage = photos[1] || photos[0] || '';
+    const dimensions = photoDimensions.get(product.image);
+    if (dimensions) { product.width = dimensions.width; product.height = dimensions.height; }
+  }
+
+  function hydrateProductPhotos(content) {
+    for (const product of content.products) {
+      if (product.image && product.width && product.height) photoDimensions.set(product.image, { width: product.width, height: product.height });
+      setProductPhotos(product, productPhotos(product));
+    }
+  }
 
   function hasUnsavedEdits() {
     if (!ready) return false;
@@ -132,6 +159,8 @@
     if (field.type === 'select' && !field.options.some(option => option[0] === value)) return 'Выберите значение из списка.';
     if (field.type === 'number' && (value === '' || !Number.isFinite(Number(value)) || !Number.isInteger(Number(value)) || Number(value) < 0 || Number(value) > 10000000)) return 'Введите целую цену от 0 до 10 000 000 ₽.';
     if (field.type === 'sizes' && (!Array.isArray(value) || !value.length || value.some(size => !allowedSizes.includes(size)))) return 'Укажите размеры из списка: XS, S, M, L, XL, XXL.';
+    if (field.type === 'images' && (!Array.isArray(value) || !value.length)) return 'Загрузите хотя бы одну фотографию товара.';
+    if (field.type === 'images' && (value.length > MAX_PRODUCT_PHOTOS || new Set(value).size !== value.length || value.some(photo => !validPhotoPath(photo)))) return 'Добавьте до 10 разных фотографий JPG, PNG или WebP.';
     return '';
   }
 
@@ -141,14 +170,14 @@
       const target = { type: 'section', id: definition.id };
       for (const field of definition.fields) {
         const error = validateField(field, draft.sections[definition.id][field.key]);
-        if (error) errors.set(fieldPath(field.key, target), error);
+        if (error && !errors.has(fieldPath(field.key, target))) errors.set(fieldPath(field.key, target), error);
       }
     }
     for (const product of draft.products) {
       const target = { type: 'product', id: product.id };
       for (const field of productFields) {
-        const error = field.key === 'image' && !product.image ? 'Загрузите основную фотографию товара.' : validateField(field, product[field.key]);
-        if (error) errors.set(fieldPath(field.key, target), error);
+        const error = validateField(field, product[field.key]);
+        if (error && !errors.has(fieldPath(field.key, target))) errors.set(fieldPath(field.key, target), error);
       }
     }
     return errors;
@@ -161,7 +190,7 @@
     const errors = errorsForAllFields();
     if (busy || uploads) {
       statusNode.dataset.state = 'busy';
-      statusNode.textContent = uploads ? 'Загружаем фотографию на сервер…' : 'Сохраняем изменения…';
+      statusNode.textContent = uploads ? uploadProgress || 'Загружаем фотографию на сервер…' : 'Сохраняем изменения…';
     } else if (errorNode.textContent || errors.size) {
       statusNode.dataset.state = 'error';
       statusNode.textContent = errors.size ? 'Проверьте поля перед сохранением' : 'Изменения не сохранены';
@@ -177,10 +206,26 @@
     resetButton.disabled = busy || uploads > 0 || !dirty;
     logoutButton.disabled = busy || uploads > 0;
     addProductButton.disabled = busy || uploads > 0;
-    $$('[data-cms-field], [data-cms-upload], [data-cms-image-reset], [data-cms-select], [data-cms-preview-photo], [data-cms-reset-confirm], [data-cms-reset-cancel]').forEach(control => {
+    $$('[data-cms-field], [data-cms-upload], [data-cms-image-reset], [data-cms-select], [data-cms-preview-photo], [data-cms-photo-preview], [data-cms-photo-move], [data-cms-photo-remove], [data-cms-photos-reset], [data-cms-photo-error-dismiss], [data-cms-reset-confirm], [data-cms-reset-cancel]').forEach(control => {
       control.disabled = busy || uploads > 0;
       if (control.hasAttribute('data-cms-image-reset') && !selectedContent()[control.dataset.cmsImageReset] && !uploadErrors.has(fieldPath(control.dataset.cmsImageReset))) control.disabled = true;
     });
+    if (selection.type === 'product') {
+      const photos = productPhotos(selectedContent());
+      const locked = busy || uploads > 0;
+      const input = $('[data-cms-upload="images"]');
+      if (input) input.disabled = locked || photos.length >= MAX_PRODUCT_PHOTOS;
+      $$('[data-cms-photo-move]').forEach(button => {
+        const index = Number(button.dataset.cmsPhotoIndex) + Number(button.dataset.cmsPhotoMove);
+        button.disabled = locked || index < 0 || index >= photos.length;
+      });
+      const reset = $('[data-cms-photos-reset]');
+      if (reset) reset.disabled = locked || (sameValue(photos, productPhotos(selectedContent(baseline))) && !uploadErrors.has(fieldPath('images')));
+      const dismiss = $('[data-cms-photo-error-dismiss]');
+      if (dismiss) dismiss.hidden = !photos.length || !uploadErrors.has(fieldPath('images'));
+      const progress = $('[data-cms-photo-progress]');
+      if (progress) { progress.textContent = uploads ? uploadProgress : ''; progress.hidden = !uploads; }
+    }
     workspace.setAttribute('aria-busy', String(busy || uploads > 0));
     for (const field of selectedFields()) {
       const message = errors.get(fieldPath(field.key)) || '';
@@ -223,9 +268,30 @@
     });
   }
 
+  function photoItems(photos) {
+    return photos.map((photo, index) => `<li class="cms-photo-item" data-cms-photo-item data-cms-photo-index="${index}"><div class="cms-photo-item__heading"><span>Фото ${index + 1}</span>${index === 0 ? '<span class="cms-photo-cover" data-cms-photo-cover>Главное</span>' : ''}</div><button class="cms-photo-thumb" type="button" data-cms-photo-preview="${index}" aria-label="Предпросмотр фото ${index + 1}" aria-pressed="${previewPhoto === index}"><img src="${escapeHTML(photo)}" alt="" loading="lazy" /></button><div class="cms-photo-actions"><button type="button" data-cms-photo-move="-1" data-cms-photo-index="${index}" aria-label="Фото ${index + 1}: переместить раньше"${index === 0 ? ' disabled' : ''}><span aria-hidden="true">←</span><span class="sr-only">Раньше</span></button><button type="button" data-cms-photo-move="1" data-cms-photo-index="${index}" aria-label="Фото ${index + 1}: переместить позже"${index === photos.length - 1 ? ' disabled' : ''}><span aria-hidden="true">→</span><span class="sr-only">Позже</span></button><button class="cms-photo-remove" type="button" data-cms-photo-remove="${index}" aria-label="Удалить фото ${index + 1}">Удалить</button></div></li>`).join('');
+  }
+
+  function productPhotoField(content) {
+    const photos = productPhotos(content);
+    const saved = productPhotos(selectedContent(baseline));
+    return `<div class="cms-field cms-photo-editor" data-cms-photos><div class="cms-photo-editor__heading"><span class="cms-field__label" id="cms-field-images-label">Фотографии товара</span><span class="cms-photo-count" data-cms-photo-count aria-live="polite">${photos.length} / ${MAX_PRODUCT_PHOTOS} фото</span></div><ol class="cms-photo-list" data-cms-photo-list aria-label="Порядок фотографий товара">${photoItems(photos)}</ol><p class="cms-photo-empty" data-cms-photo-empty${photos.length ? ' hidden' : ''}>Добавьте фотографии товара. Первое фото станет главным.</p><label class="cms-upload-trigger" for="cms-field-images"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M4 14v6h16v-6" /></svg><span>Добавить фотографии</span><input id="cms-field-images" type="file" multiple accept="image/jpeg,image/png,image/webp" data-cms-upload="images" aria-labelledby="cms-field-images-label" aria-describedby="cms-field-images-hint cms-field-images-error" /></label><p class="cms-field__hint" id="cms-field-images-hint">До 10 фото · JPG, PNG или WebP · до 8 МБ каждое.<br>Меняйте порядок стрелками. Первое фото — главное, остальные появятся в галерее товара.</p><p class="cms-photo-progress" data-cms-photo-progress role="status" aria-live="polite" hidden></p><div class="cms-photo-editor__actions"><button class="cms-image-reset" type="button" data-cms-photos-reset>${saved.length ? 'Вернуть сохранённые фотографии' : 'Убрать фотографии'}</button><button class="cms-image-reset" type="button" data-cms-photo-error-dismiss hidden>Оставить прежние фотографии</button></div><p class="cms-field__error" id="cms-field-images-error" data-cms-field-error="images" role="alert"></p></div>`;
+  }
+
+  function refreshProductPhotos() {
+    if (selection.type !== 'product') return;
+    const photos = productPhotos(selectedContent());
+    previewPhoto = Math.max(0, Math.min(previewPhoto, photos.length - 1));
+    $('[data-cms-photo-list]').innerHTML = photoItems(photos);
+    $('[data-cms-photo-count]').textContent = `${photos.length} / ${MAX_PRODUCT_PHOTOS} фото`;
+    $('[data-cms-photo-empty]').hidden = photos.length > 0;
+    renderPhotoSwitch();
+  }
+
   function renderFields() {
     const content = selectedContent();
     const targetFields = selectedFields();
+    if (selection.type === 'product') previewPhoto = Math.max(0, Math.min(previewPhoto, productPhotos(content).length - 1));
     if (selection.type === 'section') {
       const index = api.sectionDefinitions.findIndex(section => section.id === selection.id);
       const definition = api.sectionDefinitions[index];
@@ -242,9 +308,10 @@
       const id = `cms-field-${field.key}`;
       const errorId = `${id}-error`;
       const value = content[field.key] ?? '';
+      if (field.type === 'images') return productPhotoField(content);
       if (field.type === 'image') {
         const savedPhoto = selectedContent(baseline)?.[field.key];
-        return `<div class="cms-field cms-field--half"><span class="cms-field__label" id="${id}-label">${escapeHTML(field.label)}</span><div class="cms-image-field"><div class="cms-image-field__frame"><img ${value ? `src="${escapeHTML(value)}"` : 'hidden'} alt="${escapeHTML(field.label)}" data-cms-field-image="${field.key}" /><span data-cms-file-note="${field.key}">${value ? 'Фото товара' : 'Фото не загружено'}</span></div><label class="cms-upload-trigger" for="${id}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M4 14v6h16v-6" /></svg><span>Загрузить фото</span><input id="${id}" type="file" accept="image/jpeg,image/png,image/webp" data-cms-upload="${field.key}" aria-labelledby="${id}-label" aria-describedby="${id}-hint ${errorId}" /></label><p class="cms-field__hint" id="${id}-hint">JPG, PNG или WebP · до 10 МБ${field.key === 'altImage' ? '<br>Без второго ракурса используем основное фото.' : ''}</p><button class="cms-image-reset" type="button" data-cms-image-reset="${field.key}">${savedPhoto ? 'Вернуть сохранённое фото' : 'Убрать фото'}</button><p class="cms-field__error" id="${errorId}" data-cms-field-error="${field.key}"></p></div></div>`;
+        return `<div class="cms-field cms-field--half"><span class="cms-field__label" id="${id}-label">${escapeHTML(field.label)}</span><div class="cms-image-field"><div class="cms-image-field__frame"><img ${value ? `src="${escapeHTML(value)}"` : 'hidden'} alt="${escapeHTML(field.label)}" data-cms-field-image="${field.key}" /><span data-cms-file-note="${field.key}">${value ? 'Фото товара' : 'Фото не загружено'}</span></div><label class="cms-upload-trigger" for="${id}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M4 14v6h16v-6" /></svg><span>Загрузить фото</span><input id="${id}" type="file" accept="image/jpeg,image/png,image/webp" data-cms-upload="${field.key}" aria-labelledby="${id}-label" aria-describedby="${id}-hint ${errorId}" /></label><p class="cms-field__hint" id="${id}-hint">JPG, PNG или WebP · до 8 МБ</p><button class="cms-image-reset" type="button" data-cms-image-reset="${field.key}">${savedPhoto ? 'Вернуть сохранённое фото' : 'Убрать фото'}</button><p class="cms-field__error" id="${errorId}" data-cms-field-error="${field.key}"></p></div></div>`;
       }
       const formattedValue = field.type === 'sizes' ? value.join(', ') : value;
       const hintText = field.type === 'sizes' ? 'Через запятую: XS, S, M, L, XL, XXL' : field.hint;
@@ -265,7 +332,7 @@
     const container = $('[data-cms-photo-switch]');
     container.className = selection.type === 'product' ? 'cms-preview__photo-switch' : '';
     container.innerHTML = selection.type === 'product'
-      ? `<button type="button" data-cms-preview-photo="image" aria-pressed="${previewPhoto === 'image'}">Основное фото</button><button type="button" data-cms-preview-photo="altImage" aria-pressed="${previewPhoto === 'altImage'}">Второй ракурс</button>`
+      ? productPhotos(selectedContent()).map((photo, index) => `<button type="button" data-cms-preview-photo="${index}" aria-pressed="${previewPhoto === index}" aria-label="Предпросмотр фото ${index + 1}">${index === 0 ? '1 · Главное' : index + 1}</button>`).join('')
       : '';
   }
 
@@ -274,7 +341,8 @@
     const text = key => escapeHTML(content[key]);
     if (selection.type === 'product') {
       const price = Number(content.price);
-      const photo = content[previewPhoto] || content.image;
+      const photos = productPhotos(content);
+      const photo = photos[previewPhoto] || photos[0];
       const facts = productFields.filter(field => field.maxLength && content[field.key]).map(field => `<p class="cms-mini-product__description" data-cms-preview-fact="${field.key}"><strong>${escapeHTML(field.label)}:</strong><br>${text(field.key)}</p>`).join('');
       previewNode.innerHTML = `<article class="cms-mini-product"><div class="cms-mini-product__photo">${photo ? `<img src="${escapeHTML(photo)}" alt="${text('title')}" />` : '<div class="cms-mini-product__placeholder">Загрузите фотографию товара</div>'}${content.label ? `<span class="cms-mini-product__badge">${text('label')}</span>` : ''}</div><div class="cms-mini-product__body"><span class="cms-mini-product__label">${content.category === 'hoodie' ? 'Худи' : 'Футболка'} / ${escapeHTML(colors.find(color => color[0] === content.color)?.[1] || '')}</span><h3>${text('title') || 'Название товара'}</h3><p class="cms-mini-product__subtitle">${text('subtitle')}</p><strong class="cms-mini-product__price">${content.price !== '' && Number.isFinite(price) ? `${new Intl.NumberFormat('ru-RU').format(price)} ₽` : '— ₽'}</strong><div class="cms-mini-product__sizes">${content.sizes.map(size => `<span>${escapeHTML(size)}</span>`).join('')}</div><p class="cms-mini-product__description">${text('description')}</p>${facts}</div></article>`;
       return;
@@ -296,7 +364,7 @@
   function selectItem(type, id) {
     if (!ready || busy || uploads) return;
     selection = { type, id };
-    previewPhoto = 'image';
+    previewPhoto = 0;
     updateNavigation();
     renderFields();
     renderPreview();
@@ -317,7 +385,8 @@
   }
 
   async function preparePhoto(file) {
-    if (file.size > 10 * 1024 * 1024) throw new Error('Фото больше 10 МБ. Выберите файл поменьше.');
+    if (!file.size) throw new Error('Выберите непустой файл фотографии.');
+    if (file.size > MAX_PHOTO_BYTES) throw new Error('Фото больше 8 МБ. Выберите файл поменьше.');
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) throw new Error('Выберите фотографию в формате JPG, PNG или WebP.');
     const bytes = new Uint8Array(await file.slice(0, 16).arrayBuffer());
     if (imageHeaderType(bytes) !== file.type) throw new Error('Этот файл не похож на фотографию. Выберите JPG, PNG или WebP.');
@@ -362,11 +431,50 @@
       const [type, id] = select.dataset.cmsSelect.split(':');
       selectItem(type, id);
     }
-    const photo = event.target.closest('[data-cms-preview-photo]');
-    if (photo) {
-      previewPhoto = photo.dataset.cmsPreviewPhoto;
-      $$('[data-cms-preview-photo]').forEach(button => button.setAttribute('aria-pressed', String(button === photo)));
+    const photo = event.target.closest('[data-cms-preview-photo], [data-cms-photo-preview]');
+    if (photo && selection.type === 'product' && !busy && !uploads) {
+      const index = Number(photo.dataset.cmsPreviewPhoto ?? photo.dataset.cmsPhotoPreview);
+      if (!Number.isInteger(index) || !productPhotos(selectedContent())[index]) return;
+      previewPhoto = index;
+      $$('[data-cms-preview-photo], [data-cms-photo-preview]').forEach(button => button.setAttribute('aria-pressed', String(Number(button.dataset.cmsPreviewPhoto ?? button.dataset.cmsPhotoPreview) === previewPhoto)));
       renderPreview();
+    }
+    const move = event.target.closest('[data-cms-photo-move]');
+    const remove = event.target.closest('[data-cms-photo-remove]');
+    const photosReset = event.target.closest('[data-cms-photos-reset]');
+    const dismissError = event.target.closest('[data-cms-photo-error-dismiss]');
+    if ((move || remove || photosReset || dismissError) && selection.type === 'product' && !busy && !uploads) {
+      const product = selectedContent();
+      const photos = productPhotos(product);
+      const selectedPhoto = photos[previewPhoto];
+      let focus;
+      if (move) {
+        const index = Number(move.dataset.cmsPhotoIndex);
+        const next = index + Number(move.dataset.cmsPhotoMove);
+        if (!Number.isInteger(index) || !Number.isInteger(next) || !photos[index] || !photos[next]) return;
+        [photos[index], photos[next]] = [photos[next], photos[index]];
+        setProductPhotos(product, photos);
+        previewPhoto = Math.max(0, photos.indexOf(selectedPhoto));
+        focus = `[data-cms-photo-preview="${next}"]`;
+      } else if (remove) {
+        const index = Number(remove.dataset.cmsPhotoRemove);
+        if (!Number.isInteger(index) || !photos[index]) return;
+        photos.splice(index, 1); setProductPhotos(product, photos);
+        previewPhoto = Math.max(0, photos.indexOf(selectedPhoto));
+        focus = photos.length ? `[data-cms-photo-preview="${Math.min(index, photos.length - 1)}"]` : '[data-cms-upload="images"]';
+      } else if (photosReset) {
+        const original = selectedContent(baseline);
+        setProductPhotos(product, productPhotos(original));
+        product.width = original?.width || 1200; product.height = original?.height || 1500;
+        previewPhoto = 0;
+        focus = '[data-cms-upload="images"]';
+      }
+      uploadErrors.delete(fieldPath('images'));
+      refreshProductPhotos(); applyEdit();
+      if (focus) {
+        const control = $(focus);
+        (control?.disabled ? $('[data-cms-photo-preview="0"]') : control)?.focus({ preventScroll: true });
+      }
     }
     const imageReset = event.target.closest('[data-cms-image-reset]');
     if (imageReset && !busy && !uploads) {
@@ -400,10 +508,66 @@
     applyEdit();
   });
 
+  form.addEventListener('load', event => {
+    const image = event.target;
+    if (!(image instanceof HTMLImageElement) || !image.closest('[data-cms-photo-item]') || !image.naturalWidth || !image.naturalHeight) return;
+    const path = image.getAttribute('src');
+    if (validPhotoPath(path)) photoDimensions.set(path, { width: image.naturalWidth, height: image.naturalHeight });
+  }, true);
+
+  async function uploadProductPhotos(input) {
+    const files = [...input.files];
+    if (!files.length) return;
+    const target = { ...selection };
+    const uploadDraft = draft;
+    const product = selectedContent(draft, target);
+    const original = productPhotos(product);
+    const path = fieldPath('images', target);
+    uploads += 1; uploadProgress = 'Подготавливаем фотографии…';
+    uploadErrors.delete(path); errorNode.textContent = '';
+    updateStatus();
+    const active = () => !navigatingAway && draft === uploadDraft && selectedContent(draft, target) === product;
+    try {
+      const remaining = MAX_PRODUCT_PHOTOS - original.length;
+      if (files.length > remaining) throw new Error(`Можно добавить ещё ${remaining} фото. Выбрано ${files.length}. Всего у товара может быть до 10 фотографий.`);
+      for (const file of files) {
+        if (!file.size || file.size > MAX_PHOTO_BYTES) throw new Error(`«${file.name}»: выберите непустое фото до 8 МБ.`);
+        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) throw new Error(`«${file.name}»: выберите JPG, PNG или WebP.`);
+      }
+      const prepared = [];
+      for (let index = 0; index < files.length; index += 1) {
+        uploadProgress = `Подготавливаем фото ${index + 1} из ${files.length}…`; updateStatus();
+        prepared.push(await preparePhoto(files[index]));
+        if (!active()) return;
+      }
+      const uploaded = [];
+      for (let index = 0; index < prepared.length; index += 1) {
+        uploadProgress = `Загружаем фото ${index + 1} из ${files.length}…`; updateStatus();
+        const result = await api.upload(prepared[index].file);
+        if (!active()) return;
+        if (!validPhotoPath(result?.url)) throw new Error('Не удалось подтвердить загрузку фотографии. Попробуйте снова.');
+        uploaded.push({ url: result.url, width: prepared[index].width, height: prepared[index].height });
+      }
+      // Publish this batch to the local draft only when every upload succeeded.
+      if (!active()) return;
+      for (const photo of uploaded) photoDimensions.set(photo.url, { width: photo.width, height: photo.height });
+      setProductPhotos(product, [...new Set([...original, ...uploaded.map(photo => photo.url)])]);
+    } catch (error) {
+      if (active()) {
+        const message = error?.status || error?.name === 'TypeError' ? humanError(error, 'Не удалось загрузить фотографии. Попробуйте снова.') : error.message || 'Не удалось подготовить фотографии.';
+        uploadErrors.set(path, `${message} Фотографии товара не изменены.`);
+      }
+    } finally {
+      uploads -= 1; uploadProgress = ''; input.value = '';
+      if (active()) { refreshProductPhotos(); applyEdit(); }
+    }
+  }
+
   form.addEventListener('change', async event => {
     const input = event.target.closest('[data-cms-upload]');
     const file = input?.files?.[0];
     if (!file || !ready || busy || uploads) return;
+    if (input.dataset.cmsUpload === 'images') { await uploadProductPhotos(input); return; }
     const target = { ...selection };
     const uploadDraft = draft;
     const key = input.dataset.cmsUpload;
@@ -450,8 +614,9 @@
     setBusy(true);
     try {
       const payload = clone(draft);
-      for (const product of payload.products) if (!product.altImage) product.altImage = product.image;
+      for (const product of payload.products) setProductPhotos(product, productPhotos(product));
       draft = await api.save(payload);
+      hydrateProductPhotos(draft);
       baseline = clone(draft);
       uploadErrors.clear();
       const time = new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' }).format(new Date());
@@ -501,7 +666,7 @@
     draft.products.push(blankProduct(id));
     errorNode.textContent = '';
     selection = { type: 'product', id };
-    previewPhoto = 'image';
+    previewPhoto = 0;
     renderNavigation();
     renderFields();
     renderPreview();
@@ -567,6 +732,7 @@
     $('[data-cms-user]').textContent = session.user.username;
     logoutButton.disabled = false;
     draft = await api.load();
+    hydrateProductPhotos(draft);
   } catch (error) {
     statusNode.dataset.state = 'error';
     statusNode.textContent = 'Не удалось загрузить содержимое сайта';

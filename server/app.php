@@ -122,7 +122,7 @@ function mahara_validate_content(mixed $input, bool $revision = true): array {
     $products = []; $ids = [];
     foreach ($input['products'] as $index => $product) {
         $label = 'Товар ' . ($index + 1);
-        if (!is_array($product) || array_is_list($product) || array_diff(array_keys($product), array_merge(MAHARA_PRODUCT_FIELDS, MAHARA_PRODUCT_FACTS)) || array_diff(MAHARA_PRODUCT_FIELDS, array_keys($product))) mahara_fail($label . ': некорректные поля.');
+        if (!is_array($product) || array_is_list($product) || array_diff(array_keys($product), array_merge(MAHARA_PRODUCT_FIELDS, MAHARA_PRODUCT_FACTS, ['images'])) || array_diff(MAHARA_PRODUCT_FIELDS, array_keys($product))) mahara_fail($label . ': некорректные поля.');
         if (!is_string($product['id']) || !preg_match('/^[a-z0-9][a-z0-9-]{0,79}$/D', $product['id']) || isset($ids[$product['id']])) mahara_fail($label . ': укажите уникальный код из латинских букв, цифр и дефисов.');
         $ids[$product['id']] = true;
         if (!in_array($product['category'], ['hoodie', 'tee'], true)) mahara_fail($label . ': неизвестная категория.');
@@ -134,11 +134,19 @@ function mahara_validate_content(mixed $input, bool $revision = true): array {
             if (!is_string($size) || !in_array($size, MAHARA_SIZES, true) || in_array($size, $sizes, true)) mahara_fail($label . ': некорректные размеры.');
             $sizes[] = $size;
         }
+        $legacyImages = [mahara_image_path($product['image'], $label . ': фотография'), mahara_image_path($product['altImage'], $label . ': вторая фотография')];
+        $sources = array_key_exists('images', $product) ? $product['images'] : $legacyImages;
+        if (!is_array($sources) || !array_is_list($sources) || count($sources) < 1 || count($sources) > 10) mahara_fail($label . ': от 1 до 10 фотографий.');
+        $images = [];
+        foreach ($sources as $source) {
+            $image = mahara_image_path($source, $label . ': фотография галереи');
+            if (!in_array($image, $images, true)) $images[] = $image;
+        }
         $validated = [
             'id' => $product['id'], 'title' => mahara_text($product['title'], $label . ': название', 200, true),
             'subtitle' => mahara_text($product['subtitle'], $label . ': подзаголовок'), 'category' => $product['category'], 'color' => $product['color'],
             'price' => mahara_integer($product['price'], 0, 10000000, $label . ': цена'),
-            'image' => mahara_image_path($product['image'], $label . ': фотография'), 'altImage' => mahara_image_path($product['altImage'], $label . ': вторая фотография'),
+            'image' => $images[0], 'altImage' => $images[1] ?? $images[0], 'images' => $images,
             'label' => mahara_text($product['label'], $label . ': метка'), 'sizes' => array_values(array_intersect(MAHARA_SIZES, $sizes)),
             'description' => mahara_text($product['description'], $label . ': описание', 5000), 'url' => $product['url'],
             'width' => mahara_integer($product['width'], 1, 16384, $label . ': ширина'), 'height' => mahara_integer($product['height'], 1, 16384, $label . ': высота'),
@@ -237,6 +245,8 @@ function mahara_api(string $path, string $method): never {
     mahara_shipping_api($path, $method);
     mahara_payments_api($path, $method);
     mahara_inventory_api($path, $method);
+    require_once __DIR__ . '/operations.php';
+    mahara_operations_api($path, $method);
     if ($path === '/api/content' && in_array($method, ['GET', 'HEAD'], true)) mahara_json(mahara_content());
     if ($path === '/api/admin/session' && $method === 'GET') {
         $session = mahara_require_session(); mahara_json(['user' => ['username' => $session['username']], 'csrfToken' => $session['csrf_token']]);
@@ -355,11 +365,11 @@ function mahara_dispatch(): never {
             if ($method !== 'HEAD') echo $legal;
             exit;
         }
-        if (in_array($path, ['/admin', '/admin/', '/admin.html', '/inventory.html', '/admin/inventory', '/orders.html', '/admin/orders'], true)) {
+        if (in_array($path, ['/admin', '/admin/', '/admin.html', '/inventory.html', '/admin/inventory', '/orders.html', '/admin/orders', '/operations.html', '/admin/operations'], true)) {
             header('Cache-Control: no-store');
             if (!mahara_session()) { header('Location: /admin/login', true, 302); exit; }
             if (in_array($path, ['/admin', '/admin/'], true)) { header('Location: /admin.html', true, 302); exit; }
-            $page = in_array($path, ['/inventory.html', '/admin/inventory'], true) ? 'inventory.html' : (in_array($path, ['/orders.html', '/admin/orders'], true) ? 'orders.html' : 'admin.html');
+            $page = in_array($path, ['/inventory.html', '/admin/inventory'], true) ? 'inventory.html' : (in_array($path, ['/orders.html', '/admin/orders'], true) ? 'orders.html' : (in_array($path, ['/operations.html', '/admin/operations'], true) ? 'operations.html' : 'admin.html'));
             $file = mahara_template($page);
             if ($file) mahara_send_file($file, 'text/html; charset=utf-8', false, true);
         }
@@ -389,7 +399,7 @@ function mahara_dispatch(): never {
             $file = mahara_safe_file($root . '/assets/vendor/swiper', basename($path));
             if ($file) mahara_send_file($file, str_ends_with($path, '.css') ? 'text/css; charset=utf-8' : 'application/javascript; charset=utf-8', true);
         }
-        $publicFiles = ['styles.css', 'legal.css', 'script.js', 'catalog-data.js', 'cms-data.js', 'admin.css', 'admin.js', 'admin-login.js', 'inventory.css', 'inventory.js', 'management.css', 'checkout.css', 'checkout.js', 'orders.css', 'orders.js', 'product-gallery.css', 'product-gallery.js', 'robots.txt', 'sitemap.xml'];
+        $publicFiles = ['styles.css', 'legal.css', 'script.js', 'catalog-data.js', 'cms-data.js', 'admin.css', 'admin.js', 'admin-login.js', 'inventory.css', 'inventory.js', 'management.css', 'checkout.css', 'checkout.js', 'orders.css', 'orders.js', 'operations.css', 'operations.js', 'product-gallery.css', 'product-gallery.js', 'robots.txt', 'sitemap.xml'];
         if (in_array(ltrim($path, '/'), $publicFiles, true)) {
             $file = mahara_safe_file($root, ltrim($path, '/'));
             $types = ['css' => 'text/css; charset=utf-8', 'js' => 'application/javascript; charset=utf-8', 'txt' => 'text/plain; charset=utf-8', 'xml' => 'application/xml; charset=utf-8'];

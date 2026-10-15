@@ -154,7 +154,8 @@
 
   function setProduct(root, product) {
     if (!(root instanceof Element) || !root.matches('[data-product-gallery]') || !product || typeof product !== 'object') return;
-    const photos = [...new Set([product.image, product.altImage].map(source).filter(Boolean))];
+    const sources = Array.isArray(product.images) && product.images.length ? product.images : [product.image, product.altImage];
+    const photos = [...new Set(sources.map(source).filter(Boolean))].slice(0, 10);
     if (!photos.length) return;
     const title = typeof product.title === 'string' && product.title.trim() ? product.title.trim() : 'Товар MAHARA';
     const width = Number.isSafeInteger(product.width) && product.width > 0 ? product.width : 1200;

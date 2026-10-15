@@ -8,7 +8,7 @@
   };
   const productFacts = Object.keys(productFactLabels);
   const baseProducts = clone(window.MaharaCatalog.products).map(product => ({
-    ...product, ...Object.fromEntries(productFacts.map(key => [key, typeof product[key] === 'string' ? product[key].trim().slice(0, 2000) : '']))
+    ...product, images: productImages(product), ...Object.fromEntries(productFacts.map(key => [key, typeof product[key] === 'string' ? product[key].trim().slice(0, 2000) : '']))
   }));
   const defaults = {
     version: 1,
@@ -74,6 +74,11 @@
     return fallback;
   }
 
+  function productImages(product) {
+    const sources = Array.isArray(product?.images) && product.images.length ? product.images : [product?.image, product?.altImage];
+    return [...new Set(sources.map(value => imageSource(value, null)).filter(Boolean))].slice(0, 10);
+  }
+
   function normalize(input) {
     const result = clone(defaults);
     if (!input || input.version !== 1) return result;
@@ -103,6 +108,10 @@
       const price = Number(source.price);
       if (Number.isFinite(price) && price >= 0 && price <= 10000000) product.price = Math.round(price);
       for (const key of ['image', 'altImage']) product[key] = imageSource(source[key], product[key]);
+      product.images = productImages(source);
+      if (!product.images.length) product.images = productImages({ image: product.image, altImage: product.altImage });
+      product.image = product.images[0];
+      product.altImage = product.images[1] || product.image;
       if (Array.isArray(source.sizes)) {
         const sizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL'].filter(size => source.sizes.includes(size));
         if (sizes.length) product.sizes = sizes;
@@ -238,7 +247,7 @@
         // controller fails to load, the server-rendered first photo still works.
         window.MaharaProductGallery?.setProduct(gallery, product);
       } else if (gallery) {
-        const photos = product.image === product.altImage ? [product.image] : [product.image, product.altImage];
+        const photos = productImages(product);
         gallery.replaceChildren(...photos.map((source, index) => {
           const picture = document.createElement('img');
           picture.src = source;
@@ -272,5 +281,5 @@
     return value;
   }
 
-  window.MaharaCMS = { getDefaults: () => clone(defaults), sectionDefinitions, load, save, upload, apply };
+  window.MaharaCMS = { getDefaults: () => clone(defaults), sectionDefinitions, productImages, load, save, upload, apply };
 })();

@@ -9,8 +9,8 @@
   <link rel="icon" href="/assets/icons/favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="/styles.css?v=20261011-2" />
   <link rel="stylesheet" href="/inventory.css?v=20261011-2" />
-  <link rel="stylesheet" href="/management.css?v=20261011-2" />
-  <script defer src="/inventory.js?v=20261011-2"></script>
+  <link rel="stylesheet" href="/management.css?v=20261015-2" />
+  <script defer src="/inventory.js?v=20261015-2"></script>
 </head>
 <body class="page-inventory">
   <a class="skip-link" href="#main-content">Перейти к содержимому</a>
@@ -22,9 +22,10 @@
       </a>
       <span class="management-header__label">Управление</span>
       <nav class="management-nav" aria-label="Разделы управления">
-        <a href="/orders.html">Заказы</a>
         <a href="/admin.html">Контент и товары</a>
         <a href="/inventory.html" aria-current="page">Склад</a>
+        <a href="/orders.html">Заказы</a>
+        <a href="/operations.html">Операции</a>
         <a href="/catalog.html">Витрина <span aria-hidden="true">↗</span></a>
       </nav>
       <div class="management-header__actions">
@@ -50,7 +51,7 @@
 
     <div class="inventory-loading" data-inventory-loading role="status" aria-live="polite">
       <span class="inventory-spinner" aria-hidden="true"></span>
-      <div><strong>Загружаем склад</strong><p>Получаем актуальные остатки и историю операций…</p></div>
+      <div><strong>Загружаем склад</strong><p>Получаем актуальные остатки…</p></div>
     </div>
 
     <div class="inventory-error" data-inventory-error role="alert" hidden></div>
@@ -131,17 +132,7 @@
         </div>
       </section>
 
-      <section class="inventory-history" aria-labelledby="history-title">
-        <div class="inventory-section-heading">
-          <div><p class="inventory-kicker">Движение товара</p><h2 id="history-title">Последние операции</h2></div>
-          <p class="inventory-section-note">Поступления, списания и корректировки</p>
-        </div>
-        <div class="inventory-history__list" data-movement-list></div>
-        <div class="inventory-history-empty" data-history-empty hidden>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M5 12h9M5 18h11" /></svg>
-          <div><h3>Операций пока нет</h3><p>Здесь появится история после первого изменения остатков.</p></div>
-        </div>
-      </section>
+      <p class="inventory-history-link"><a class="inventory-btn inventory-btn--secondary" href="/operations.html">Приходы, списания и заказы →</a></p>
     </div>
   </main>
 

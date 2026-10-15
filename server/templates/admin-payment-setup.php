@@ -17,8 +17,8 @@ $setupNoticeMessage = is_array($notice ?? null) && is_string($notice['message'] 
   <title>Настройка Т-Кассы — MAHARA</title>
   <link rel="icon" href="/assets/icons/favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="/styles.css?v=20261011-2" />
-  <link rel="stylesheet" href="/admin.css?v=20261011-2" />
-  <link rel="stylesheet" href="/management.css?v=20261011-2" />
+  <link rel="stylesheet" href="/admin.css?v=20261015-2" />
+  <link rel="stylesheet" href="/management.css?v=20261015-2" />
   <style>
     .page-payment-setup .payment-setup-container { max-width: 1080px; }
     .page-payment-setup .cms-intro h1 { font-size: clamp(2.8rem, 5vw, 4.3rem); }
@@ -52,9 +52,10 @@ $setupNoticeMessage = is_array($notice ?? null) && is_string($notice['message'] 
       </a>
       <span class="management-header__label">Управление</span>
       <nav class="management-nav" aria-label="Разделы управления">
-        <a href="/orders.html">Заказы</a>
         <a href="/admin.html">Контент и товары</a>
         <a href="/inventory.html">Склад</a>
+        <a href="/orders.html">Заказы</a>
+        <a href="/operations.html">Операции</a>
         <a href="/catalog.html">Витрина <span aria-hidden="true">↗</span></a>
       </nav>
       <div class="management-header__actions">

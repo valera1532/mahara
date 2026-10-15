@@ -13,7 +13,7 @@ function copy(relative) {
   fs.mkdirSync(path.dirname(target), {recursive:true});
   fs.copyFileSync(source, target);
 }
-for (const file of ['index.php','.htaccess','.user.ini','styles.css','legal.css','script.js','catalog-data.js','cms-data.js','admin.css','admin.js','admin-login.js','inventory.css','inventory.js','management.css','checkout.css','checkout.js','orders.css','orders.js','product-gallery.css','product-gallery.js','site-defaults.json','seo.config.json']) copy(file);
+for (const file of ['index.php','.htaccess','.user.ini','styles.css','legal.css','script.js','catalog-data.js','cms-data.js','admin.css','admin.js','admin-login.js','inventory.css','inventory.js','management.css','checkout.css','checkout.js','orders.css','orders.js','operations.css','operations.js','product-gallery.css','product-gallery.js','site-defaults.json','seo.config.json']) copy(file);
 for (const file of fs.readdirSync(path.join(root, 'server'))) {
   if (file.endsWith('.php') && file !== 'config.local.php' && file !== 'router.php') copy(`server/${file}`);
 }

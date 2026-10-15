@@ -25,7 +25,7 @@ function renderPage(string $pathname, array $content): ?string
     $url = static fn(string $file): string => $origin . ($file === 'index.html' ? '' : ltrim($file, '/'));
 
     if ($route === 'robots.txt') {
-        return "User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /checkout\nDisallow: /inventory.html\nDisallow: /orders.html\nDisallow: /api/\nDisallow: /server/\nDisallow: /tests/\nDisallow: /preview/\nDisallow: /tools/\nSitemap: " . $url('sitemap.xml') . "\n";
+        return "User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /checkout\nDisallow: /inventory.html\nDisallow: /orders.html\nDisallow: /operations.html\nDisallow: /api/\nDisallow: /server/\nDisallow: /tests/\nDisallow: /preview/\nDisallow: /tools/\nSitemap: " . $url('sitemap.xml') . "\n";
     }
     if ($route === 'sitemap.xml') {
         $files = array_merge(['index.html', 'catalog.html'], array_column($products, 'url'));
@@ -189,9 +189,15 @@ function mhRenderColor(string $color): string
     return ['black' => 'Чёрный', 'green' => 'Зелёный', 'white' => 'Белый', 'slate' => 'Серо-синий', 'burgundy' => 'Бордовый'][$color] ?? $color;
 }
 
+function mhRenderProductImages(array $product): array
+{
+    $sources = is_array($product['images'] ?? null) && $product['images'] !== [] ? $product['images'] : [$product['image'], $product['altImage'] ?? ''];
+    return array_slice(array_values(array_unique(array_filter($sources, static fn(mixed $image): bool => is_string($image) && trim($image) !== ''))), 0, 10);
+}
+
 function mhRenderProductGallery(array $product): string
 {
-    $images = array_values(array_unique(array_filter([$product['image'], $product['altImage'] ?? ''], static fn(string $image): bool => trim($image) !== '')));
+    $images = mhRenderProductImages($product);
     $count = count($images); $slides = []; $thumbs = [];
     $width = mhRenderEscape($product['width']); $height = mhRenderEscape($product['height']);
     foreach ($images as $index => $image) {
@@ -275,8 +281,9 @@ function mhRenderHead(string $route, array $sections, array $products, ?array $p
     if ($product !== null) {
         $title = $product['title'] . ' — ' . ($product['category'] === 'hoodie' ? 'худи с вышивкой' : 'футболка из хлопка') . ' | ' . $brand;
         $description = mhRenderDescription($product['description'] . '; размеры ' . implode(', ', $product['sizes']));
-        $image = $product['image']; $width = max(1, (int) $product['width']); $height = max(1, (int) $product['height']);
-        $schema = ['@type' => 'Product', '@id' => $url($route) . '#product', 'name' => $product['title'], 'url' => $url($route), 'description' => $product['description'], 'image' => array_values(array_unique([$url($product['image']), $url($product['altImage'])])), 'brand' => ['@type' => 'Brand', 'name' => $brand], 'category' => $product['category'] === 'hoodie' ? 'Худи' : 'Футболки', 'color' => mhRenderColor($product['color']), 'size' => $product['sizes']];
+        $photos = mhRenderProductImages($product);
+        $image = $photos[0] ?? $product['image']; $width = max(1, (int) $product['width']); $height = max(1, (int) $product['height']);
+        $schema = ['@type' => 'Product', '@id' => $url($route) . '#product', 'name' => $product['title'], 'url' => $url($route), 'description' => $product['description'], 'image' => array_map($url, $photos), 'brand' => ['@type' => 'Brand', 'name' => $brand], 'category' => $product['category'] === 'hoodie' ? 'Худи' : 'Футболки', 'color' => mhRenderColor($product['color']), 'size' => $product['sizes']];
         $page['name'] = $product['title']; $page['mainEntity'] = ['@id' => $schema['@id']];
         $graph = [$organization, $website, $schema, $page];
         $crumbs[] = ['Каталог', 'catalog.html']; $crumbs[] = [$product['title'], $route];
@@ -303,8 +310,8 @@ function mhRenderHead(string $route, array $sections, array $products, ?array $p
     $eBrand = mhRenderEscape($brand); $eLocale = mhRenderEscape($config['locale'] ?? 'ru_RU');
     $json = mhRenderJson(['@context' => 'https://schema.org', '@graph' => $graph]);
     $galleryStyles = $product === null ? '' : "\n  <link rel=\"stylesheet\" href=\"/assets/vendor/swiper/swiper-bundle.min.css?v=14.3.0\" />\n  <link rel=\"stylesheet\" href=\"/product-gallery.css?v=20261015-1\" />";
-    $galleryScripts = $product === null ? '' : "\n  <script defer src=\"/assets/vendor/swiper/swiper-bundle.min.js?v=14.3.0\"></script>\n  <script defer src=\"/product-gallery.js?v=20261015-1\"></script>";
-    $cmsVersion = $product === null ? '20261011-2' : '20261015-1';
+    $galleryScripts = $product === null ? '' : "\n  <script defer src=\"/assets/vendor/swiper/swiper-bundle.min.js?v=14.3.0\"></script>\n  <script defer src=\"/product-gallery.js?v=20261015-2\"></script>";
+    $cmsVersion = '20261015-2';
     return <<<HTML
 <head>
   <meta charset="utf-8" />
