@@ -233,7 +233,11 @@
         fact.querySelector('dd').style.whiteSpace = 'pre-line';
       }
       const gallery = detail.querySelector('.product-detail__gallery');
-      if (gallery) {
+      if (gallery?.hasAttribute('data-product-gallery')) {
+        // Preserve the carousel structure during CMS hydration. If its optional
+        // controller fails to load, the server-rendered first photo still works.
+        window.MaharaProductGallery?.setProduct(gallery, product);
+      } else if (gallery) {
         const photos = product.image === product.altImage ? [product.image] : [product.image, product.altImage];
         gallery.replaceChildren(...photos.map((source, index) => {
           const picture = document.createElement('img');

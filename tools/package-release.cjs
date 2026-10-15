@@ -13,7 +13,7 @@ function copy(relative) {
   fs.mkdirSync(path.dirname(target), {recursive:true});
   fs.copyFileSync(source, target);
 }
-for (const file of ['index.php','.htaccess','.user.ini','styles.css','legal.css','script.js','catalog-data.js','cms-data.js','admin.css','admin.js','admin-login.js','inventory.css','inventory.js','management.css','checkout.css','checkout.js','orders.css','orders.js','site-defaults.json','seo.config.json']) copy(file);
+for (const file of ['index.php','.htaccess','.user.ini','styles.css','legal.css','script.js','catalog-data.js','cms-data.js','admin.css','admin.js','admin-login.js','inventory.css','inventory.js','management.css','checkout.css','checkout.js','orders.css','orders.js','product-gallery.css','product-gallery.js','site-defaults.json','seo.config.json']) copy(file);
 for (const file of fs.readdirSync(path.join(root, 'server'))) {
   if (file.endsWith('.php') && file !== 'config.local.php' && file !== 'router.php') copy(`server/${file}`);
 }
@@ -33,6 +33,7 @@ copy('tools/tbank.php');
 copy('tools/notifications.php');
 copy('tools/backup.php');
 copy('server/certs/tbank-ca.pem');
+for (const file of ['swiper-bundle.min.js', 'swiper-bundle.min.css', 'LICENSE', 'SOURCE.json']) copy(`assets/vendor/swiper/${file}`);
 fs.copyFileSync(path.join(root,'server','config.local.php.example'),path.join(site,'server','config.local.php.example'));
 fs.copyFileSync(path.join(root,'DEPLOYMENT.md'),path.join(destination,'DEPLOYMENT.md'));
 fs.writeFileSync(path.join(destination,'MANIFEST.json'),JSON.stringify({createdAt:new Date().toISOString(),target:'REG.RU Host-0 / PHP 8.2+',containsCredentials:false,containsDatabase:false,templatesPublic:false},null,2)+'\n');

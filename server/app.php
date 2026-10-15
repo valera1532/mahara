@@ -385,7 +385,11 @@ function mahara_dispatch(): never {
                 header('Cache-Control: no-cache'); if ($method !== 'HEAD') echo $rendered; exit;
             }
         }
-        $publicFiles = ['styles.css', 'legal.css', 'script.js', 'catalog-data.js', 'cms-data.js', 'admin.css', 'admin.js', 'admin-login.js', 'inventory.css', 'inventory.js', 'management.css', 'checkout.css', 'checkout.js', 'orders.css', 'orders.js', 'robots.txt', 'sitemap.xml'];
+        if (in_array($path, ['/assets/vendor/swiper/swiper-bundle.min.css', '/assets/vendor/swiper/swiper-bundle.min.js'], true)) {
+            $file = mahara_safe_file($root . '/assets/vendor/swiper', basename($path));
+            if ($file) mahara_send_file($file, str_ends_with($path, '.css') ? 'text/css; charset=utf-8' : 'application/javascript; charset=utf-8', true);
+        }
+        $publicFiles = ['styles.css', 'legal.css', 'script.js', 'catalog-data.js', 'cms-data.js', 'admin.css', 'admin.js', 'admin-login.js', 'inventory.css', 'inventory.js', 'management.css', 'checkout.css', 'checkout.js', 'orders.css', 'orders.js', 'product-gallery.css', 'product-gallery.js', 'robots.txt', 'sitemap.xml'];
         if (in_array(ltrim($path, '/'), $publicFiles, true)) {
             $file = mahara_safe_file($root, ltrim($path, '/'));
             $types = ['css' => 'text/css; charset=utf-8', 'js' => 'application/javascript; charset=utf-8', 'txt' => 'text/plain; charset=utf-8', 'xml' => 'application/xml; charset=utf-8'];

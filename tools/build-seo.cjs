@@ -21,6 +21,9 @@ const colorNames = { black: 'Чёрный', green: 'Зелёный', white: 'Б�
 const crumbs = items => ({ '@type': 'BreadcrumbList', itemListElement: items.map(([name, file], i) => ({ '@type': 'ListItem', position: i + 1, name, item: url(file) })) });
 
 function head({ file, title, description, image = 'assets/images/social-cover.jpg', imageWidth = 1200, imageHeight = 630, graph, type = 'website' }) {
+  const galleryStyles = file.startsWith('product-') ? '\n  <link rel="stylesheet" href="/assets/vendor/swiper/swiper-bundle.min.css?v=14.3.0" />\n  <link rel="stylesheet" href="/product-gallery.css?v=20261015-1" />' : '';
+  const galleryScripts = file.startsWith('product-') ? '\n  <script defer src="/assets/vendor/swiper/swiper-bundle.min.js?v=14.3.0"></script>\n  <script defer src="/product-gallery.js?v=20261015-1"></script>' : '';
+  const cmsVersion = file.startsWith('product-') ? '20261015-1' : '20261011-2';
   return `<head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -45,12 +48,21 @@ function head({ file, title, description, image = 'assets/images/social-cover.jp
   <meta name="twitter:image" content="${url(image)}" />
   <meta name="twitter:image:alt" content="${escape(title)}" />
   <link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=20261011-2" />
+  <link rel="stylesheet" href="styles.css?v=20261011-2" />${galleryStyles}
   <script type="application/ld+json">${JSON.stringify({ '@context': 'https://schema.org', '@graph': graph }).replace(/</g, '\\u003c')}</script>
-  <script defer src="catalog-data.js?v=20261011-2"></script>
-  <script defer src="cms-data.js?v=20261011-2"></script>
+  <script defer src="catalog-data.js?v=20261011-2"></script>${galleryScripts}
+  <script defer src="cms-data.js?v=${cmsVersion}"></script>
   <script defer src="script.js?v=20261012-1"></script>
 </head>`;
+}
+
+function productGallery(product) {
+  const images = [...new Set([product.image, product.altImage].filter(image => typeof image === 'string' && image.trim()))];
+  const size = `width="${escape(product.width)}" height="${escape(product.height)}"`;
+  const slides = images.map((image, index) => `<div class="swiper-slide${index === 0 ? ' is-gallery-active' : ''}"><img src="${escape(image)}" alt="${escape(product.title + (index === 0 ? '' : ' — другой ракурс'))}" ${size} ${index === 0 ? 'loading="eager" fetchpriority="high"' : 'loading="lazy"'} decoding="async" /></div>`).join('');
+  const thumbs = images.map((image, index) => `<button class="product-gallery__thumb" type="button" data-gallery-thumb="${index}" aria-label="Показать фото ${index + 1}" aria-pressed="${index === 0}"><img src="${escape(image)}" alt="" ${size} loading="lazy" decoding="async" /></button>`).join('');
+  const controls = images.length > 1 ? `<div class="product-gallery__controls"><button type="button" data-gallery-prev aria-label="Предыдущее фото" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg></button><div class="product-gallery__counter" aria-live="polite" aria-atomic="true"><span data-gallery-current>01</span><span aria-hidden="true"> / </span><span data-gallery-total>${String(images.length).padStart(2, '0')}</span></div><button type="button" data-gallery-next aria-label="Следующее фото"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 6 6 6-6 6"/></svg></button></div><div class="product-gallery__thumbs" role="group" aria-label="Выбор фотографии">${thumbs}</div>` : '';
+  return `<div class="product-detail__gallery" data-product-gallery role="region" aria-label="Фотографии товара"${images.length > 1 ? ' tabindex="0"' : ''}><div class="product-gallery__viewport swiper"><div class="swiper-wrapper">${slides}</div></div>${controls}</div>`;
 }
 
 function updatePage(file, metadata, type, selectedProducts) {
@@ -94,7 +106,7 @@ for (const product of products) {
     <div class="container">
       <nav class="breadcrumbs" aria-label="Хлебные крошки"><a href="index.html">Главная</a><span aria-hidden="true">/</span><a href="catalog.html">Каталог</a><span aria-hidden="true">/</span><span aria-current="page">${escape(product.title)}</span></nav>
       <article class="product-detail" data-product-detail data-product-id="${product.id}" aria-labelledby="product-title">
-        <div class="product-detail__gallery"><img src="${product.image}" alt="${escape(product.title)} — ${colorNames[product.color].toLowerCase()} ${product.category === 'hoodie' ? 'худи' : 'футболка'}" width="${product.width}" height="${product.height}" fetchpriority="high" decoding="async" />${product.altImage !== product.image ? `<img src="${product.altImage}" alt="${escape(product.title)} — другой ракурс" width="${product.width}" height="${product.height}" loading="lazy" decoding="async" />` : ''}</div>
+        ${productGallery(product)}
         <div class="product-detail__copy">
           <p class="eyebrow">${category} / MAHARA</p>
           <h1 id="product-title">${escape(product.title)}</h1>

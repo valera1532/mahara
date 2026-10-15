@@ -95,12 +95,47 @@ verify(value($xpath, '//p[' . hasClass('product-detail__description') . ']') ===
 verify(value($xpath, '//link[@rel="canonical"]/@href') === 'https://maharussia.ru/product-new-product.html', 'New product canonical is correct.');
 verify(str_starts_with(value($xpath, '//title'), $product['title']), 'Dynamic title metadata.');
 verify((int) $xpath->evaluate('count(//script[not(@src) and not(@type)])') === 0, 'Untrusted text cannot inject scripts.');
-verify(value($xpath, '//div[' . hasClass('product-detail__gallery') . ']/img[1]/@src') === $product['image'], 'Dynamic product image.');
-verify(value($xpath, '//div[' . hasClass('product-detail__gallery') . ']/img[2]/@src') === $product['altImage'], 'Dynamic product secondary image.');
+$gallery = '//*[@data-product-gallery]';
+$slides = $gallery . '/div[' . hasClass('product-gallery__viewport') . ' and ' . hasClass('swiper') . ']/div[' . hasClass('swiper-wrapper') . ']/div[' . hasClass('swiper-slide') . ']';
+verify((int) $xpath->evaluate('count(' . $gallery . ')') === 1 && value($xpath, $gallery . '/@role') === 'region' && value($xpath, $gallery . '/@aria-label') === 'Фотографии товара', 'Gallery is a single named region.');
+verify((int) $xpath->evaluate('count(' . $slides . ')') === 2, 'Different published images produce two carousel slides.');
+verify(value($xpath, '(' . $slides . ')[1]/img/@src') === $product['image'], 'Dynamic product image.');
+verify(value($xpath, '(' . $slides . ')[2]/img/@src') === $product['altImage'], 'Dynamic product secondary image.');
+verify(value($xpath, '(' . $slides . ')[1]/img/@alt') === $product['title'], 'Gallery image text remains escaped.');
+verify(value($xpath, '(' . $slides . ')[1]/img/@loading') === 'eager' && value($xpath, '(' . $slides . ')[1]/img/@fetchpriority') === 'high', 'First gallery image has loading priority.');
+verify(value($xpath, '(' . $slides . ')[2]/img/@loading') === 'lazy' && value($xpath, '(' . $slides . ')[1]/@class') === 'swiper-slide is-gallery-active', 'Later images are lazy and the SSR fallback selects the first slide.');
+verify((int) $xpath->evaluate('count(' . $gallery . '//*[@data-gallery-prev and @disabled])') === 1 && (int) $xpath->evaluate('count(' . $gallery . '//*[@data-gallery-next and not(@disabled)])') === 1, 'Navigation starts at the first non-looping slide.');
+verify(value($xpath, $gallery . '//*[@data-gallery-current]') === '01' && value($xpath, $gallery . '//*[@data-gallery-total]') === '02', 'Gallery counter starts with padded image numbers.');
+verify((int) $xpath->evaluate('count(' . $gallery . '//button[@data-gallery-thumb])') === 2 && value($xpath, $gallery . '//button[@data-gallery-thumb="0"]/@aria-pressed') === 'true' && value($xpath, $gallery . '//button[@data-gallery-thumb="1"]/@aria-pressed') === 'false', 'Thumbnail selection matches the first slide.');
+verify(value($xpath, $gallery . '//button[@data-gallery-thumb="1"]/@aria-label') === 'Показать фото 2' && (int) $xpath->evaluate('count(' . $gallery . '//button[@data-gallery-thumb]/img[@alt=""])') === 2, 'Thumbnail controls have accessible labels and decorative images.');
+foreach (['/assets/vendor/swiper/swiper-bundle.min.css?v=14.3.0', '/product-gallery.css?v=20261015-1'] as $asset) verify((int) $xpath->evaluate('count(//head/link[@rel="stylesheet" and @href="' . $asset . '"])') === 1, 'Product gallery stylesheet is loaded once.');
+foreach (['/assets/vendor/swiper/swiper-bundle.min.js?v=14.3.0', '/product-gallery.js?v=20261015-1', 'cms-data.js?v=20261015-1'] as $asset) verify((int) $xpath->evaluate('count(//head/script[@defer and @src="' . $asset . '"])') === 1, 'Product gallery scripts use the matching cache version.');
+verify(strpos($detail, '/swiper-bundle.min.js?') < strpos($detail, '/product-gallery.js?') && strpos($detail, '/product-gallery.js?') < strpos($detail, 'cms-data.js?'), 'Gallery controller loads after its vendor and before the CMS repaint.');
+verify(!str_contains($home, 'swiper-bundle') && !str_contains($catalog, 'swiper-bundle'), 'Non-product pages do not load gallery dependencies.');
 verify((int) $xpath->evaluate('count(//*[@data-size-choice])') === 1, 'Dynamic product sizes are current.');
 $schema = json_decode(value($xpath, '//script[@type="application/ld+json"]'), true, 512, JSON_THROW_ON_ERROR);
 $schemaProducts = array_values(array_filter($schema['@graph'], static fn(array $node): bool => $node['@type'] === 'Product'));
 verify($schemaProducts[0]['name'] === $product['title'] && $schemaProducts[0]['description'] === $product['description'], 'Product JSON-LD is current and safe.');
+
+$singleContent = $content; $singleContent['products'][0]['altImage'] = $product['image'];
+$single = document(renderPage('/product-new-product.html', $singleContent));
+verify((int) $single->evaluate('count(' . $slides . ')') === 1, 'Repeated image URLs produce one slide.');
+verify((int) $single->evaluate('count(' . $gallery . '//*[@data-gallery-prev or @data-gallery-next or @data-gallery-current or @data-gallery-total or @data-gallery-thumb])') === 0, 'A single image has no misleading navigation, counter or thumbnails.');
+verify(value($single, '(' . $slides . ')[1]/img/@src') === $product['image'] && value($single, '(' . $slides . ')[1]/img/@loading') === 'eager', 'A single image remains visible and eager without JavaScript.');
+$missingAlt = $product; unset($missingAlt['altImage']);
+verify((int) document(mhRenderProductGallery($missingAlt))->evaluate('count(//div[' . hasClass('swiper-slide') . '])') === 1, 'An absent alternate image never creates an empty source.');
+
+$defaults = json_decode((string) file_get_contents(dirname(__DIR__) . '/site-defaults.json'), true, 512, JSON_THROW_ON_ERROR);
+foreach ($defaults['products'] as $staticProduct) {
+    $staticHtml = (string) file_get_contents(dirname(__DIR__) . '/' . $staticProduct['url']);
+    $static = document($staticHtml); $expectedImages = array_values(array_unique([$staticProduct['image'], $staticProduct['altImage']]));
+    $actualImages = [];
+    foreach ($static->query($slides . '/img') as $image) $actualImages[] = $image->getAttribute('src');
+    verify($actualImages === $expectedImages, 'Static gallery uses unique images in published order: ' . $staticProduct['url']);
+    verify((int) $static->evaluate('count(' . $gallery . '//button[@data-gallery-thumb])') === (count($expectedImages) > 1 ? count($expectedImages) : 0), 'Static single/multiple image controls match the slide count.');
+    verify(value($static, '(' . $slides . ')[1]/img/@loading') === 'eager' && value($static, '(' . $slides . ')[1]/img/@fetchpriority') === 'high', 'Static first image keeps loading priority.');
+    verify(str_contains($staticHtml, '/swiper-bundle.min.css?v=14.3.0') && str_contains($staticHtml, '/product-gallery.css?v=20261015-1') && str_contains($staticHtml, 'cms-data.js?v=20261015-1') && strpos($staticHtml, '/swiper-bundle.min.js?') < strpos($staticHtml, '/product-gallery.js?') && strpos($staticHtml, '/product-gallery.js?') < strpos($staticHtml, 'cms-data.js?'), 'Static gallery dependencies load in the same order as SSR.');
+}
 
 $sitemap = renderPage('/sitemap.xml', $content);
 verify(str_contains($sitemap, 'https://maharussia.ru/product-new-product.html'), 'New product appears in sitemap.');

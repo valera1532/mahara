@@ -15,6 +15,7 @@
     "test:checkout": "node tests/checkout-browser.cjs",
     "test:orders": "node tests/orders-browser.cjs",
     "test:cart": "node tests/cart-browser.cjs",
+    "test:gallery": "node tests/product-gallery-browser.cjs",
     "test:notifications": "node tools/php.cjs tests/notifications.php",
     "test:launch": "node tools/php.cjs tests/launch-readiness.php",
     "test:legal": "node tools/php.cjs tests/launch.php",

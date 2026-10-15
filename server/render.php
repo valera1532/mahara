@@ -189,6 +189,26 @@ function mhRenderColor(string $color): string
     return ['black' => 'Чёрный', 'green' => 'Зелёный', 'white' => 'Белый', 'slate' => 'Серо-синий', 'burgundy' => 'Бордовый'][$color] ?? $color;
 }
 
+function mhRenderProductGallery(array $product): string
+{
+    $images = array_values(array_unique(array_filter([$product['image'], $product['altImage'] ?? ''], static fn(string $image): bool => trim($image) !== '')));
+    $count = count($images); $slides = []; $thumbs = [];
+    $width = mhRenderEscape($product['width']); $height = mhRenderEscape($product['height']);
+    foreach ($images as $index => $image) {
+        $source = mhRenderEscape($image);
+        $alt = mhRenderEscape($product['title'] . ($index === 0 ? '' : ' — другой ракурс'));
+        $loading = $index === 0 ? 'loading="eager" fetchpriority="high"' : 'loading="lazy"';
+        $slides[] = '<div class="swiper-slide' . ($index === 0 ? ' is-gallery-active' : '') . '"><img src="' . $source . '" alt="' . $alt . '" width="' . $width . '" height="' . $height . '" ' . $loading . ' decoding="async" /></div>';
+        $thumbs[] = '<button class="product-gallery__thumb" type="button" data-gallery-thumb="' . $index . '" aria-label="Показать фото ' . ($index + 1) . '" aria-pressed="' . ($index === 0 ? 'true' : 'false') . '"><img src="' . $source . '" alt="" width="' . $width . '" height="' . $height . '" loading="lazy" decoding="async" /></button>';
+    }
+    $controls = '';
+    if ($count > 1) {
+        $total = str_pad((string) $count, 2, '0', STR_PAD_LEFT);
+        $controls = '<div class="product-gallery__controls"><button type="button" data-gallery-prev aria-label="Предыдущее фото" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg></button><div class="product-gallery__counter" aria-live="polite" aria-atomic="true"><span data-gallery-current>01</span><span aria-hidden="true"> / </span><span data-gallery-total>' . $total . '</span></div><button type="button" data-gallery-next aria-label="Следующее фото"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 6 6 6-6 6"/></svg></button></div><div class="product-gallery__thumbs" role="group" aria-label="Выбор фотографии">' . implode('', $thumbs) . '</div>';
+    }
+    return '<div class="product-detail__gallery" data-product-gallery role="region" aria-label="Фотографии товара"' . ($count > 1 ? ' tabindex="0"' : '') . '><div class="product-gallery__viewport swiper"><div class="swiper-wrapper">' . implode('', $slides) . '</div></div>' . $controls . '</div>';
+}
+
 function mhRenderProduct(array $product): string
 {
     $p = array_map(static fn(mixed $value): mixed => is_array($value) ? $value : mhRenderEscape($value), $product);
@@ -197,18 +217,17 @@ function mhRenderProduct(array $product): string
     $sizes = mhRenderSizes($product['sizes']);
     $availableSizes = mhRenderEscape(implode(', ', $product['sizes']));
     $price = mhRenderPrice($product['price']);
-    $gallery = '<img src="' . $p['image'] . '" alt="' . $p['title'] . '" width="' . $p['width'] . '" height="' . $p['height'] . '" fetchpriority="high" decoding="async" />';
+    $gallery = mhRenderProductGallery($product);
     $facts = '';
     foreach (['composition' => 'Состав', 'care' => 'Уход', 'manufacturer' => 'Изготовитель и страна производства', 'measurements' => 'Замеры и посадка'] as $key => $label) {
         if (trim((string)($product[$key] ?? '')) !== '') $facts .= '<div data-product-fact="' . $key . '"><dt>' . $label . '</dt><dd>' . nl2br(mhRenderEscape($product[$key]), false) . '</dd></div>';
     }
-    if ($product['altImage'] !== $product['image']) $gallery .= '<img src="' . $p['altImage'] . '" alt="' . $p['title'] . ' — другой ракурс" width="' . $p['width'] . '" height="' . $p['height'] . '" loading="lazy" decoding="async" />';
     return <<<HTML
 <main class="product-main" id="main-content" tabindex="-1">
   <div class="container">
     <nav class="breadcrumbs" aria-label="Хлебные крошки"><a href="index.html">Главная</a><span aria-hidden="true">/</span><a href="catalog.html">Каталог</a><span aria-hidden="true">/</span><span aria-current="page">{$p['title']}</span></nav>
     <article class="product-detail" data-product-detail data-product-id="{$p['id']}" aria-labelledby="product-title">
-      <div class="product-detail__gallery">{$gallery}</div>
+      {$gallery}
       <div class="product-detail__copy">
         <p class="eyebrow">{$category} / MAHARA</p>
         <h1 id="product-title">{$p['title']}</h1>
@@ -283,6 +302,9 @@ function mhRenderHead(string $route, array $sections, array $products, ?array $p
     $eTitle = mhRenderEscape($title); $eDescription = mhRenderEscape($description); $eUrl = mhRenderEscape($url($route)); $eImage = mhRenderEscape($url($image));
     $eBrand = mhRenderEscape($brand); $eLocale = mhRenderEscape($config['locale'] ?? 'ru_RU');
     $json = mhRenderJson(['@context' => 'https://schema.org', '@graph' => $graph]);
+    $galleryStyles = $product === null ? '' : "\n  <link rel=\"stylesheet\" href=\"/assets/vendor/swiper/swiper-bundle.min.css?v=14.3.0\" />\n  <link rel=\"stylesheet\" href=\"/product-gallery.css?v=20261015-1\" />";
+    $galleryScripts = $product === null ? '' : "\n  <script defer src=\"/assets/vendor/swiper/swiper-bundle.min.js?v=14.3.0\"></script>\n  <script defer src=\"/product-gallery.js?v=20261015-1\"></script>";
+    $cmsVersion = $product === null ? '20261011-2' : '20261015-1';
     return <<<HTML
 <head>
   <meta charset="utf-8" />
@@ -308,10 +330,10 @@ function mhRenderHead(string $route, array $sections, array $products, ?array $p
   <meta name="twitter:image" content="{$eImage}" />
   <meta name="twitter:image:alt" content="{$eTitle}" />
   <link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=20261011-2" />
+  <link rel="stylesheet" href="styles.css?v=20261011-2" />{$galleryStyles}
   <script type="application/ld+json">{$json}</script>
-  <script defer src="catalog-data.js?v=20261011-2"></script>
-  <script defer src="cms-data.js?v=20261011-2"></script>
+  <script defer src="catalog-data.js?v=20261011-2"></script>{$galleryScripts}
+  <script defer src="cms-data.js?v={$cmsVersion}"></script>
   <script defer src="script.js?v=20261012-1"></script>
 </head>
 HTML;
