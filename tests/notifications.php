@@ -180,6 +180,7 @@ $GLOBALS['mahara_mail_test_config']['enabled'] = true; $transportMode = 'success
 notification_verify(mahara_notifications_work(1)['sent'] === 1, 'A later successful retry completes the job.');
 notification_verify(notification_link_token($messages[$beforeFailed + 1]) === $failedToken && $messages[$beforeFailed + 1]['messageId'] === $messages[$beforeFailed]['messageId'], 'Retries reuse capability and stable Message-ID.');
 notification_verify(str_contains($messages[$beforeFailed + 1]['body'], 'Номер отправления: FIXTURE-TRACK-1'), 'Shipment mail includes the saved tracking number.');
+notification_verify(str_contains($messages[$beforeFailed + 1]['body'], "https://www.cdek.ru/ru/tracking/\n") && notification_link_token($messages[$beforeFailed + 1]) === $failedToken, 'Shipment mail links to official CDEK tracking without invented query parameters and keeps private order access.');
 
 mahara_order_notification_schedule($id, 'order_completed');
 $leased = notification_queue('order_completed')[0];
@@ -190,6 +191,7 @@ $beforeLease = count($messages);
 notification_verify(mahara_notifications_work(1)['sent'] === 0 && count($messages) === $beforeLease, 'An active sending lease cannot be stolen.');
 mahara_query('UPDATE order_mail_queue SET available_at=? WHERE id=?', [time() - 1, $leased['id']]);
 notification_verify(mahara_notifications_work(1)['sent'] === 1 && notification_link_token($messages[$beforeLease]) === $leaseToken, 'An expired lease is recovered using its existing capability.');
+notification_verify(str_contains($messages[$beforeLease]['body'], 'Номер отправления: FIXTURE-TRACK-1') && str_contains($messages[$beforeLease]['body'], "https://www.cdek.ru/ru/tracking/\n"), 'Completed-order mail also includes the tracking number and official tracking page.');
 
 mahara_order_notification_schedule($id, 'refund_completed');
 $exhausted = notification_queue('refund_completed')[0];
@@ -208,6 +210,43 @@ mahara_notifications_work(1);
 notification_verify((int)mahara_query('SELECT COUNT(*) FROM order_recovery_tokens WHERE token_hash=?', [hash('sha256', $old)])->fetchColumn() === 0, 'Worker removes capabilities expired for over one day.');
 notification_verify(notification_state() === $unchanged, 'Notifications/recovery do not mutate orders, payment/refund state, reservations or stock.');
 notification_verify(!str_contains(json_encode($failure, JSON_THROW_ON_ERROR), $accessToken) && !str_contains(json_encode($failure, JSON_THROW_ON_ERROR), 'fixture-mail-password'), 'Worker return value contains no bearer or secret.');
+
+// An old shipped order may have had no number, and its original shipment email
+// already used the legacy dedup key. Adding/correcting the track must still mail.
+mahara_query("UPDATE checkout_orders SET fulfillment_status='shipped',tracking_number='' WHERE id=?", [$id]);
+foreach (['TRACK-A', 'TRACK-B', 'TRACK-A'] as $index => $tracking) {
+    $beforeUpdate = count($messages);
+    mahara_payments_fulfillment($id, ['status' => 'shipped', 'trackingNumber' => $tracking]);
+    mahara_payments_fulfillment($id, ['status' => 'shipped', 'trackingNumber' => ' ' . $tracking . ' ']);
+    notification_verify(count(notification_queue('order_tracking_updated')) === $index + 1, 'Each changed track queues once; repeated trimmed values do not queue another message.');
+    notification_verify(count(notification_queue('order_shipped')) === 1, 'Tracking corrections preserve legacy shipment deduplication.');
+    notification_verify(mahara_notifications_work(3)['sent'] === 1 && count($messages) === $beforeUpdate + 1, 'A correction produces one customer message, including returning to an earlier number.');
+    $updated = $messages[$beforeUpdate];
+    notification_verify(str_contains($updated['subject'], 'Номер отправления обновлён') && str_contains($updated['body'], 'Номер отправления: ' . $tracking) && str_contains($updated['body'], "https://www.cdek.ru/ru/tracking/\n") && strlen(notification_link_token($updated)) === 43, 'Correction message includes the current track, official CDEK page and private order link.');
+}
+mahara_query("UPDATE checkout_orders SET fulfillment_status='completed' WHERE id=?", [$id]);
+mahara_payments_fulfillment($id, ['status' => 'completed', 'trackingNumber' => 'TRACK-C']);
+notification_verify(count(notification_queue('order_tracking_updated')) === 4 && mahara_notifications_work(3)['sent'] === 1, 'Correcting a completed order also sends the current tracking number.');
+
+foreach ([['completed', 'TRACK-D'], ['processing', 'TRACK-E']] as [$previousStatus, $tracking]) {
+    $currentTracking = mahara_payments_row($id)['tracking_number'];
+    mahara_payments_fulfillment($id, ['status' => $previousStatus, 'trackingNumber' => $currentTracking]);
+    $beforeUpdate = count($messages); $beforeCorrections = count(notification_queue('order_tracking_updated'));
+    mahara_payments_fulfillment($id, ['status' => 'shipped', 'trackingNumber' => $tracking]);
+    mahara_payments_fulfillment($id, ['status' => 'shipped', 'trackingNumber' => $tracking]);
+    notification_verify(count(notification_queue('order_tracking_updated')) === $beforeCorrections + 1 && count(notification_queue('order_shipped')) === 1, 'Returning to shipped with a changed track bypasses its already-delivered legacy status event exactly once.');
+    notification_verify(mahara_notifications_work(3)['sent'] === 1 && count($messages) === $beforeUpdate + 1 && str_contains($messages[$beforeUpdate]['body'], 'Номер отправления: ' . $tracking), 'A status transition with a changed track delivers the current number after completed or processing.');
+}
+$firstShipment = array_replace($order, ['id' => 'fixture-order-2', 'number' => 'MH-FIXTURE-2', 'request_id' => 'fixture-order-request-2', 'payment_id' => 'fixture-payment-2', 'tracking_number' => '']);
+mahara_query('INSERT INTO checkout_orders(' . implode(',', array_keys($firstShipment)) . ') VALUES(' . implode(',', array_fill(0, count($firstShipment), '?')) . ')', array_values($firstShipment));
+$beforeCorrections = count(notification_queue('order_tracking_updated')); $beforeFirst = count($messages);
+mahara_payments_fulfillment($firstShipment['id'], ['status' => 'shipped', 'trackingNumber' => 'FIRST-TRACK']);
+mahara_payments_fulfillment($firstShipment['id'], ['status' => 'shipped', 'trackingNumber' => 'FIRST-TRACK']);
+notification_verify(count(notification_queue('order_shipped')) === 2 && count(notification_queue('order_tracking_updated')) === $beforeCorrections && mahara_notifications_work(3)['sent'] === 1, 'The first shipment queues only its original status email, not a duplicate tracking correction.');
+notification_verify(count($messages) === $beforeFirst + 1 && str_contains($messages[$beforeFirst]['subject'], 'Заказ передан в доставку') && str_contains($messages[$beforeFirst]['body'], 'Номер отправления: FIRST-TRACK'), 'The normal first-shipment message keeps its meaning and correct track.');
+mahara_payments_fulfillment($firstShipment['id'], ['status' => 'processing', 'trackingNumber' => 'FIRST-TRACK']);
+mahara_payments_fulfillment($firstShipment['id'], ['status' => 'shipped', 'trackingNumber' => 'FIRST-TRACK']);
+notification_verify(mahara_notifications_work(3)['sent'] === 0 && count(notification_queue('order_tracking_updated')) === $beforeCorrections, 'Returning to shipped with the same tracking number does not send a duplicate.');
 
 // Exercise the actual SMTP function with namespace-local stream primitives.
 // No socket is opened. A server that accepts DATA then rejects QUIT must still

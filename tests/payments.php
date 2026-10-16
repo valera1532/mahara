@@ -266,7 +266,8 @@ payment_verify(mahara_payments_reserved($id, 'S') === 0 && payment_balance($id) 
 $movements = (int)mahara_query('SELECT COUNT(*) FROM inventory_movements')->fetchColumn();
 mahara_payments_notification(payment_signed($row, 'CONFIRMED'));
 mahara_payments_notification(payment_signed($row, 'NEW'));
-payment_verify(payment_balance($id) === 10 && (int)mahara_query('SELECT COUNT(*) FROM inventory_movements')->fetchColumn() === $movements && mahara_payments_row($orderId)['bank_status'] === 'CONFIRMED', 'Duplicate confirmation and late NEW do not reverse paid status or duplicate stock movement.');
+mahara_payments_notification(payment_signed($row, 'CANCELED', 0));
+payment_verify(payment_balance($id) === 10 && (int)mahara_query('SELECT COUNT(*) FROM inventory_movements')->fetchColumn() === $movements && mahara_payments_row($orderId)['status'] === 'paid' && mahara_payments_row($orderId)['bank_status'] === 'CONFIRMED', 'Duplicate confirmation, late NEW and zero-amount CANCELED do not reverse paid status or duplicate stock movement.');
 mahara_payments_notification(payment_signed($row, 'PARTIAL_REFUNDED', 100));
 mahara_payments_notification(payment_signed($row, 'CONFIRMED'));
 payment_verify(mahara_payments_row($orderId)['status'] === 'partial_refunded' && payment_balance($id) === 10, 'Partial refund stays distinct and late confirmation cannot erase it.');
@@ -311,6 +312,44 @@ payment_verify(mahara_payments_view($expiration)['payment']['url'] === null, 'Ex
 $bank[$expiration['payment_id']]['Status'] = 'DEADLINE_EXPIRED';
 payment_verify(payment_recheck($expiredId)['status'] === 'expired' && mahara_payments_reserved($id, 'M') === 0, 'Bank-confirmed deadline expiry releases stock.');
 
+// Observed provider pattern: canceling an unpaid payment can return Amount=0.
+// The background sweep must release only that order's reserve, without Cancel.
+$canceled = mahara_payments_create(payment_request($id, 'M', 2)); $canceledId = $canceled['order']['id'];
+$canceledRow = mahara_payments_row($canceledId);
+$stillPending = mahara_payments_create(payment_request($id, 'M')); $stillPendingRow = mahara_payments_row($stillPending['order']['id']);
+$zeroCanceled = payment_signed($canceledRow, 'CANCELED', 0);
+$beforeBalance = payment_balance($id, 'M');
+$beforeMovements = (int)mahara_query('SELECT COUNT(*) FROM inventory_movements')->fetchColumn();
+foreach (['PaymentId' => $stillPendingRow['payment_id'], 'OrderId' => $stillPendingRow['number'], 'TerminalKey' => 'ANOTHER-TERMINAL'] as $field => $value) {
+    $wrong = array_replace($zeroCanceled, [$field => $value]);
+    payment_error(409, static fn() => mahara_payments_apply($canceledId, $wrong, true), 'Zero-amount cancellation still rejects mismatched ' . $field);
+}
+foreach ([1, (int)$canceledRow['total_amount'] - 1, (int)$canceledRow['total_amount'] + 1, -1, 'invalid', false, null] as $amount) {
+    $wrong = array_replace($zeroCanceled, ['Amount' => $amount]);
+    payment_error(409, static fn() => mahara_payments_apply($canceledId, $wrong, true), 'Cancellation still rejects a malformed or unrelated nonzero amount');
+}
+foreach (['NEW', 'AUTHORIZED', 'CONFIRMED', 'DEADLINE_EXPIRED'] as $status) {
+    payment_error(409, static fn() => mahara_payments_notification(payment_signed($canceledRow, $status, 0)), 'Zero amount is not accepted for ' . $status);
+}
+payment_verify(mahara_payments_row($canceledId)['status'] === 'payment_pending' && mahara_payments_reserved($id, 'M') === 3 && payment_balance($id, 'M') === $beforeBalance, 'Rejected cancellation identities and amounts preserve pending orders, reservations and stock.');
+$bank[$canceledRow['payment_id']] = $zeroCanceled;
+mahara_query('UPDATE checkout_orders SET expires_at=?,last_checked=0 WHERE id=?', [time() - 10, $canceledId]);
+mahara_query('UPDATE checkout_orders SET last_checked=? WHERE id=?', [time(), $stillPendingRow['id']]);
+$beforeCalls = count($calls); mahara_payments_reconcile_pending(1);
+$settled = mahara_payments_row($canceledId);
+payment_verify($settled['status'] === 'canceled' && $settled['bank_status'] === 'CANCELED' && !(bool)$settled['stock_applied'], 'Background GetState accepts a matching canceled payment with zero remaining amount.');
+payment_verify(mahara_payments_reserved($id, 'M') === 1 && mahara_payments_row($stillPendingRow['id'])['status'] === 'payment_pending', 'Zero-amount cancellation releases only its own reservation.');
+payment_verify(array_slice($calls, $beforeCalls) === ['GetState'], 'Background cancellation recovery only reads bank state and never sends Cancel or Init.');
+$beforeCalls = count($calls);
+mahara_payments_reconcile_pending(1); payment_recheck($canceledId);
+mahara_payments_notification($zeroCanceled); mahara_payments_notification($zeroCanceled);
+payment_verify(mahara_payments_row($canceledId)['status'] === 'canceled' && mahara_payments_reserved($id, 'M') === 1 && count($calls) === $beforeCalls, 'Repeated canceled callbacks and reconciles are idempotent and do not query a final order.');
+$zeroCanceledString = payment_signed($stillPendingRow, 'CANCELED', 0); $zeroCanceledString['Amount'] = '0';
+$zeroCanceledString['Token'] = mahara_tbank_token($zeroCanceledString, 'fixture-password');
+mahara_payments_notification($zeroCanceledString);
+payment_verify(mahara_payments_row($stillPendingRow['id'])['status'] === 'canceled' && mahara_payments_reserved($id, 'M') === 0, 'Signed canceled callback also accepts a numeric-string zero amount.');
+payment_verify(payment_balance($id, 'M') === $beforeBalance && (int)mahara_query('SELECT COUNT(*) FROM inventory_movements')->fetchColumn() === $beforeMovements, 'Canceling unpaid orders never writes off or restocks goods.');
+
 // A failed GetQr must never expose the generic card payment form.
 $unsafeQr = true; $unsafe = mahara_payments_create(payment_request($id, 'M')); $unsafeQr = false;
 payment_verify($unsafe['payment']['url'] === null, 'Invalid SBP URL does not fall back to generic card form.');
@@ -320,6 +359,12 @@ payment_verify(mahara_payments_view(mahara_payments_row($unsafe['order']['id']),
 // closing receipt. The operator must use their configured fiscal process.
 $ship = mahara_payments_create(payment_request($id, 'M')); $shipRow = mahara_payments_row($ship['order']['id']);
 mahara_payments_notification(payment_signed($shipRow, 'CONFIRMED'));
+foreach (['shipped', 'completed'] as $fulfillmentStatus) {
+    payment_error(400, static fn() => mahara_payments_fulfillment($shipRow['id'], ['status' => $fulfillmentStatus, 'trackingNumber' => '   ']), 'Shipment/completion requires a nonblank tracking number');
+}
+payment_verify(mahara_payments_row($shipRow['id'])['fulfillment_status'] === 'processing' && mahara_payments_row($shipRow['id'])['tracking_number'] === '', 'Rejected fulfillment does not save status or tracking');
+$processing = mahara_payments_fulfillment($shipRow['id'], ['status' => 'processing', 'trackingNumber' => '']);
+payment_verify($processing['order']['fulfillmentStatus'] === 'processing', 'An order being prepared does not require tracking yet');
 $fulfilled = mahara_payments_fulfillment($shipRow['id'], ['status' => 'shipped', 'trackingNumber' => 'TEST-TRACK']);
 payment_verify($fulfilled['order']['fulfillmentStatus'] === 'shipped' && $fulfilled['order']['trackingNumber'] === 'TEST-TRACK' && $fulfilled['order']['receiptStatus'] === 'provider_requested', 'Fulfillment stores tracking without claiming receipt issuance.');
 

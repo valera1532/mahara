@@ -49,9 +49,9 @@ function mahara_payments_builtin_legal_url(?string $url): bool {
     return strtolower($parts['host']) === strtolower($origin['host'] ?? '') && ($parts['scheme'] ?? '') === ($origin['scheme'] ?? '') && $port($parts) === $port($origin);
 }
 
-function mahara_payments_schedule_notification(string $id, string $event): void {
+function mahara_payments_schedule_notification(string $id, string $event, string $occurrence = ''): void {
     if (!function_exists('mahara_order_notification_schedule')) return;
-    try { mahara_order_notification_schedule($id, $event); }
+    try { mahara_order_notification_schedule($id, $event, $occurrence); }
     catch (Throwable) { error_log('MAHARA order notification scheduling failed.'); }
 }
 
@@ -484,12 +484,15 @@ function mahara_payments_bank_identity(array $row, array $reply, bool $requireOr
     $paymentId = $reply['PaymentId'] ?? '';
     $amount = $reply['Amount'] ?? null;
     $refundState = in_array($reply['Status'] ?? null, ['REFUNDING', 'PARTIAL_REFUNDED', 'REFUNDED'], true);
+    // A canceled unpaid payment can report zero remaining amount. Keep this
+    // exception separate from refunds and from the exact amount of a payment.
+    $canceledZero = ($reply['Status'] ?? null) === 'CANCELED' && in_array($amount, [0, '0'], true);
     if ((!is_string($paymentId) && !is_int($paymentId)) || !preg_match('/^[0-9]{1,30}$/D', (string)$paymentId)
         || (isset($row['payment_id']) && $row['payment_id'] !== '' && $row['payment_id'] !== (string)$paymentId)
         || ($requireOrder && ($reply['OrderId'] ?? null) !== $row['number'])
         || (isset($reply['TerminalKey']) && ($reply['TerminalKey'] !== $row['terminal_key']))
         || (!is_int($amount) && !is_string($amount)) || !preg_match('/^[0-9]{1,12}$/D', (string)$amount)
-        || ($refundState ? ((int)$amount < 0 || (int)$amount > (int)$row['total_amount']) : (int)$amount !== (int)$row['total_amount'])) throw new MaharaHttpError(409, 'Параметры платежа не совпадают с заказом.');
+        || ($refundState ? ((int)$amount < 0 || (int)$amount > (int)$row['total_amount']) : (!$canceledZero && (int)$amount !== (int)$row['total_amount']))) throw new MaharaHttpError(409, 'Параметры платежа не совпадают с заказом.');
 }
 
 function mahara_payments_bind(string $id, array $reply): void {
@@ -690,13 +693,26 @@ function mahara_payments_fulfillment(string $id, mixed $input): array {
     mahara_object($input, ['status', 'trackingNumber'], 'Доставка заказа');
     if (!is_string($input['status']) || !in_array($input['status'], ['processing', 'shipped', 'completed'], true)) mahara_fail('Неизвестный статус доставки.');
     $tracking = mahara_text($input['trackingNumber'], 'Трек-номер', 100);
-    $result = mahara_payments_transaction(static function () use ($id, $input, $tracking): array {
+    $notify = in_array($input['status'], ['shipped', 'completed'], true);
+    if ($notify && $tracking === '') mahara_fail('Укажите номер отправления СДЭК, прежде чем отметить заказ отправленным или полученным.');
+    $event = null; $occurrence = '';
+    $result = mahara_payments_transaction(static function () use ($id, $input, $tracking, $notify, &$event, &$occurrence): array {
         $row = mahara_payments_row($id);
         if ($row['status'] !== 'paid') throw new MaharaHttpError(409, 'Отправка доступна только для оплаченного заказа.');
+        if ($notify && $row['fulfillment_status'] !== $input['status']) $event = 'order_' . $input['status'];
+        if ($notify && $row['tracking_number'] !== $tracking && ($event === null
+            || (mahara_query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='order_mail_queue'")->fetchColumn()
+                && mahara_query('SELECT 1 FROM order_mail_queue WHERE order_id=? AND event=? LIMIT 1', [$id, $event])->fetchColumn()))) {
+            $event = 'order_tracking_updated';
+            // A correction must survive an earlier status email's dedup key,
+            // including shipped -> processing -> shipped and A -> B -> A.
+            // Unchanged saves and concurrent retries do not create another one.
+            $occurrence = bin2hex(random_bytes(16));
+        }
         mahara_query('UPDATE checkout_orders SET fulfillment_status=?,tracking_number=?,updated_at=? WHERE id=?', [$input['status'], $tracking, time(), $id]);
         return mahara_payments_view(mahara_payments_row($id), true);
     });
-    if (in_array($input['status'], ['shipped', 'completed'], true)) mahara_payments_schedule_notification($id, 'order_' . $input['status']);
+    if ($event !== null) mahara_payments_schedule_notification($id, $event, $occurrence);
     return $result;
 }
 

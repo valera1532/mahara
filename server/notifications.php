@@ -50,15 +50,16 @@ function mahara_notifications_schema(): void {
     $ready = true;
 }
 
-function mahara_order_notification_schedule(string $id, string $event): void {
-    if (!in_array($event, ['order_created', 'payment_paid', 'refund_completed', 'order_shipped', 'order_completed'], true) || !mahara_mail_ready()) return;
+function mahara_order_notification_schedule(string $id, string $event, string $occurrence = ''): void {
+    if (!in_array($event, ['order_created', 'payment_paid', 'refund_completed', 'order_shipped', 'order_completed', 'order_tracking_updated'], true) || !mahara_mail_ready()) return;
     mahara_notifications_schema();
     $row = mahara_payments_row($id);
     $customer = json_decode($row['customer_json'], true, 64, JSON_THROW_ON_ERROR);
     $recipients = ['customer' => $customer['email'] ?? '', 'shop' => mahara_mail_config()['shop_email']];
     foreach ($recipients as $audience => $email) {
         if (!is_string($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) continue;
-        mahara_query('INSERT OR IGNORE INTO order_mail_queue(dedup_key,order_id,event,recipient,audience,available_at,created_at) VALUES(?,?,?,?,?,?,?)', [$id . ':' . $event . ':' . $audience, $id, $event, $email, $audience, time(), time()]);
+        $key = $id . ':' . $event . ($occurrence !== '' ? ':' . $occurrence : '') . ':' . $audience;
+        mahara_query('INSERT OR IGNORE INTO order_mail_queue(dedup_key,order_id,event,recipient,audience,available_at,created_at) VALUES(?,?,?,?,?,?,?)', [$key, $id, $event, $email, $audience, time(), time()]);
     }
 }
 
@@ -112,14 +113,16 @@ function mahara_notifications_api(string $path, string $method): void {
 }
 
 function mahara_order_mail_message(array $job, array $row): array {
-    $labels = ['order_created' => 'Заказ создан', 'payment_paid' => 'Оплата подтверждена', 'refund_completed' => 'Возврат денег подтверждён', 'order_shipped' => 'Заказ передан в доставку', 'order_completed' => 'Заказ завершён', 'access_recovery' => 'Доступ к вашему заказу'];
+    $labels = ['order_created' => 'Заказ создан', 'payment_paid' => 'Оплата подтверждена', 'refund_completed' => 'Возврат денег подтверждён', 'order_shipped' => 'Заказ передан в доставку', 'order_completed' => 'Заказ завершён', 'order_tracking_updated' => 'Номер отправления обновлён', 'access_recovery' => 'Доступ к вашему заказу'];
     $label = $labels[$job['event']] ?? 'Информация о заказе';
     $body = $label . ".\nНомер заказа: " . $row['number'] . "\n\n";
     foreach (json_decode($row['items_json'], true, 64, JSON_THROW_ON_ERROR) as $item) $body .= $item['title'] . ' · ' . $item['size'] . ' × ' . $item['qty'] . "\n";
     $body .= "\nСтоимость товаров и оплачиваемых на сайте услуг: " . number_format((int)$row['total_amount'] / 100, 2, ',', ' ') . " ₽.\n";
     $delivery = json_decode($row['delivery_json'], true, 64, JSON_THROW_ON_ERROR);
     if (!empty($delivery['quoteId'])) $body .= "Доставка СДЭК оплачивается отдельно перевозчику.\n";
-    if ($row['tracking_number'] !== '' && in_array($job['event'], ['order_shipped', 'order_completed'], true)) $body .= 'Номер отправления: ' . $row['tracking_number'] . "\n";
+    if ($row['tracking_number'] !== '' && in_array($job['event'], ['order_shipped', 'order_completed', 'order_tracking_updated'], true)) {
+        $body .= 'Номер отправления: ' . $row['tracking_number'] . "\nОтследить в СДЭК (введите номер отправления): https://www.cdek.ru/ru/tracking/\n";
+    }
     if ($job['audience'] === 'customer') $body .= "\nОткрыть заказ (одноразовая ссылка действует 24 часа):\n" . mahara_config()['origin'] . '/checkout.html#access=' . $job['link_token'] . "\n";
     else $body .= "\nЗаказ в панели магазина: " . mahara_config()['origin'] . '/orders.html' . "\n";
     $body .= "\nУсловия возврата: " . mahara_config()['origin'] . "/returns.html\n";
