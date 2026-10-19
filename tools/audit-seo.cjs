@@ -49,6 +49,15 @@ function copyDeployment(target) {
   }
   if (fs.existsSync(path.join(root, 'server/templates'))) fs.cpSync(path.join(root, 'server/templates'), path.join(target, 'server/templates'), { recursive: true });
   for (const directory of ['images', 'icons']) if (fs.existsSync(path.join(root, 'assets', directory))) fs.cpSync(path.join(root, 'assets', directory), path.join(target, 'assets', directory), { recursive: true });
+  const fonts = path.join(root, 'assets', 'fonts');
+  if (fs.existsSync(fonts)) {
+    fs.mkdirSync(path.join(target, 'assets', 'fonts'), { recursive: true });
+    for (const entry of fs.readdirSync(fonts, { withFileTypes: true })) {
+      if (entry.isFile() && (entry.name === 'fonts.css' || /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,199}\.woff2$/.test(entry.name))) fs.copyFileSync(path.join(fonts, entry.name), path.join(target, 'assets', 'fonts', entry.name));
+    }
+  }
+  fs.mkdirSync(path.join(target, 'assets', 'vendor', 'swiper'), { recursive: true });
+  for (const file of ['swiper-bundle.min.css', 'swiper-bundle.min.js']) fs.copyFileSync(path.join(root, 'assets', 'vendor', 'swiper', file), path.join(target, 'assets', 'vendor', 'swiper', file));
 }
 
 function cleanup(directory) {
@@ -366,6 +375,16 @@ async function run() {
       try {
         await page.goto(origin + route, { waitUntil: 'load', timeout: 15000 });
         await page.waitForFunction(() => !document.querySelector('[data-preloader]') || getComputedStyle(document.querySelector('[data-preloader]')).visibility === 'hidden' || getComputedStyle(document.querySelector('[data-preloader]')).display === 'none', null, { timeout: 5000 }).catch(() => {});
+        // Hero transitions can finish after the preloader is removed, even with reduced motion.
+        await page.waitForFunction(() => {
+          const heading = document.querySelector('h1');
+          if (!heading || !heading.getBoundingClientRect().width || !heading.getBoundingClientRect().height) return false;
+          for (let current = heading; current; current = current.parentElement) {
+            const style = getComputedStyle(current);
+            if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return false;
+          }
+          return true;
+        }, null, { timeout: 5000 });
         const data = await snapshot(page);
         check(errors.length === 0, `${route}: JavaScript errors: ${errors.join('; ')}`);
         check(failedResponses.length === 0, `${route}: failed requests: ${failedResponses.join('; ')}`);

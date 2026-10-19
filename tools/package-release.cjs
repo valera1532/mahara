@@ -27,6 +27,14 @@ for (const directory of ['images','icons']) {
     if (/\.(?:webp|png|jpe?g|svg|ico)$/i.test(file)) copy(`assets/${directory}/${file}`);
   }
 }
+const fonts = path.join(root, 'assets', 'fonts');
+if (fs.existsSync(fonts)) {
+  if (fs.lstatSync(fonts).isSymbolicLink()) throw new Error('Font assets must be a regular directory.');
+  for (const entry of fs.readdirSync(fonts, {withFileTypes:true})) {
+    if (entry.isFile() && (/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,199}\.woff2$/.test(entry.name)
+      || ['fonts.css', 'OFL-Cormorant-Garamond.txt', 'OFL-Manrope.txt', 'SOURCE.json'].includes(entry.name))) copy(`assets/fonts/${entry.name}`);
+  }
+}
 copy('tools/admin.php');
 copy('tools/commerce.php');
 copy('tools/tbank.php');

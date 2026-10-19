@@ -272,7 +272,7 @@ function mhRenderHead(string $route, array $sections, array $products, ?array $p
 {
     $url = static fn(string $file): string => $origin . ($file === 'index.html' ? '' : $file);
     $brand = (string) ($config['brand'] ?? 'MAHARA');
-    $organization = ['@type' => 'Organization', '@id' => $origin . '#organization', 'name' => $brand, 'url' => $origin, 'logo' => $url('assets/images/mahara-emblem.webp')];
+    $organization = ['@type' => 'Organization', '@id' => $origin . '#organization', 'name' => $brand, 'url' => $origin, 'logo' => $url('assets/icons/mahara-logo.svg')];
     $website = ['@type' => 'WebSite', '@id' => $origin . '#website', 'name' => $brand, 'url' => $origin, 'inLanguage' => 'ru-RU', 'publisher' => ['@id' => $organization['@id']]];
     $page = ['@type' => 'WebPage', '@id' => $url($route) . '#page', 'url' => $url($route), 'inLanguage' => 'ru-RU', 'isPartOf' => ['@id' => $website['@id']]];
     $image = 'assets/images/social-cover.jpg';
@@ -336,8 +336,8 @@ function mhRenderHead(string $route, array $sections, array $products, ?array $p
   <meta name="twitter:description" content="{$eDescription}" />
   <meta name="twitter:image" content="{$eImage}" />
   <meta name="twitter:image:alt" content="{$eTitle}" />
-  <link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=20261011-2" />{$galleryStyles}
+  <link rel="icon" href="assets/icons/favicon.svg?v=20261019-1" type="image/svg+xml" />
+  <link rel="stylesheet" href="styles.css?v=20261019-1" />{$galleryStyles}
   <script type="application/ld+json">{$json}</script>
   <script defer src="catalog-data.js?v=20261011-2"></script>{$galleryScripts}
   <script defer src="cms-data.js?v={$cmsVersion}"></script>

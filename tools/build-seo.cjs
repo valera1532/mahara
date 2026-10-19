@@ -15,7 +15,7 @@ const escape = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const write = (file, value) => fs.writeFileSync(path.join(root, file), value, 'utf8');
 const brand = { '@type': 'Brand', name: config.brand };
-const organization = { '@type': 'Organization', '@id': `${origin}#organization`, name: config.brand, url: origin.href, logo: url('assets/images/mahara-emblem.webp') };
+const organization = { '@type': 'Organization', '@id': `${origin}#organization`, name: config.brand, url: origin.href, logo: url('assets/icons/mahara-logo.svg') };
 const website = { '@type': 'WebSite', '@id': `${origin}#website`, name: config.brand, url: origin.href, inLanguage: 'ru-RU', publisher: { '@id': organization['@id'] } };
 const colorNames = { black: 'Чёрный', green: 'Зелёный', white: 'Белый', slate: 'Серо-синий', burgundy: 'Бордовый' };
 const crumbs = items => ({ '@type': 'BreadcrumbList', itemListElement: items.map(([name, file], i) => ({ '@type': 'ListItem', position: i + 1, name, item: url(file) })) });
@@ -47,8 +47,8 @@ function head({ file, title, description, image = 'assets/images/social-cover.jp
   <meta name="twitter:description" content="${escape(description)}" />
   <meta name="twitter:image" content="${url(image)}" />
   <meta name="twitter:image:alt" content="${escape(title)}" />
-  <link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=20261011-2" />${galleryStyles}
+  <link rel="icon" href="assets/icons/favicon.svg?v=20261019-1" type="image/svg+xml" />
+  <link rel="stylesheet" href="styles.css?v=20261019-1" />${galleryStyles}
   <script type="application/ld+json">${JSON.stringify({ '@context': 'https://schema.org', '@graph': graph }).replace(/</g, '\\u003c')}</script>
   <script defer src="catalog-data.js?v=20261011-2"></script>${galleryScripts}
   <script defer src="cms-data.js?v=${cmsVersion}"></script>

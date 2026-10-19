@@ -15,8 +15,8 @@ $setupNoticeMessage = is_array($notice ?? null) && is_string($notice['message'] 
   <meta name="theme-color" content="#050505" />
   <meta name="robots" content="noindex, nofollow" />
   <title>Настройка Т-Кассы — MAHARA</title>
-  <link rel="icon" href="/assets/icons/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="/styles.css?v=20261011-2" />
+  <link rel="icon" href="/assets/icons/favicon.svg?v=20261019-1" type="image/svg+xml" />
+  <link rel="stylesheet" href="/styles.css?v=20261019-1" />
   <link rel="stylesheet" href="/admin.css?v=20261015-2" />
   <link rel="stylesheet" href="/management.css?v=20261015-2" />
   <style>
@@ -47,9 +47,8 @@ $setupNoticeMessage = is_array($notice ?? null) && is_string($notice['message'] 
   <header class="management-header cms-topbar">
     <div class="management-header__inner">
       <a class="brand" href="/admin.html" aria-label="MAHARA — управление">
-        <svg class="brand__icon" viewBox="0 0 64 64" aria-hidden="true"><path d="M14 50V32l8-8 5 5V17l5-7 5 7v12l5-5 8 8v18M8 50h48M22 50V35M32 50V21M42 50V35" /></svg>
-        <span>MAHARA</span>
-      </a>
+      <img class="brand__logo" src="/assets/icons/mahara-logo-horizontal.svg" alt="MAHARA — Made in Russia" width="190" height="60" />
+    </a>
       <span class="management-header__label">Управление</span>
       <nav class="management-nav" aria-label="Разделы управления">
         <a href="/admin.html">Контент и товары</a>

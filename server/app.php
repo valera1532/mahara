@@ -405,6 +405,10 @@ function mahara_dispatch(): never {
             $types = ['css' => 'text/css; charset=utf-8', 'js' => 'application/javascript; charset=utf-8', 'txt' => 'text/plain; charset=utf-8', 'xml' => 'application/xml; charset=utf-8'];
             if ($file) mahara_send_file($file, $types[pathinfo($file, PATHINFO_EXTENSION)], true);
         }
+        if (preg_match('~^/assets/fonts/(?:[a-zA-Z0-9][a-zA-Z0-9._-]{0,199}\.woff2|fonts\.css)$~D', $path)) {
+            $file = mahara_safe_file($root . '/assets', substr($path, strlen('/assets/')));
+            if ($file) mahara_send_file($file, str_ends_with($path, '.css') ? 'text/css; charset=utf-8' : 'font/woff2', true);
+        }
         if (preg_match('~^/assets/(?:images|icons)/[a-zA-Z0-9][a-zA-Z0-9._-]{0,199}\.(?:webp|png|jpe?g|svg|ico|woff2?)$~D', $path)) {
             $file = mahara_safe_file($root . '/assets', substr($path, strlen('/assets/')));
             $types = ['webp' => 'image/webp', 'png' => 'image/png', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'svg' => 'image/svg+xml', 'ico' => 'image/x-icon', 'woff' => 'font/woff', 'woff2' => 'font/woff2'];

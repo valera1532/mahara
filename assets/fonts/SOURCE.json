@@ -1,0 +1,115 @@
+{
+  "repository": "https://github.com/google/fonts",
+  "revision": "47d54ca1ebb14fd864695f1d39dc734f39017c33",
+  "retrievedAt": "2026-10-19T14:50:21.139562+00:00",
+  "license": "OFL-1.1",
+  "conversion": {
+    "tool": "fontTools",
+    "version": "4.67.0",
+    "brotliVersion": "1.2.0",
+    "operation": "TTFont(source, recalcTimestamp=False); font.flavor = woff2; font.save(destination)",
+    "subsetting": false,
+    "note": "Full upstream character coverage and variable axes are preserved; no outlines or family names edited."
+  },
+  "fonts": [
+    {
+      "family": "Cormorant Garamond",
+      "style": "normal",
+      "weightRange": [
+        300,
+        700
+      ],
+      "file": "cormorant-garamond-variable.woff2",
+      "bytes": 209428,
+      "sha256": "1c7136dcfe2ba0c22bd2e4ab48467813cb6dd7b5728a73920dd9eb6452b8a558",
+      "sourceUrl": "https://raw.githubusercontent.com/google/fonts/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/cormorantgaramond/CormorantGaramond%5Bwght%5D.ttf",
+      "sourceSha256": "b20b7d9626dd956b2c5e558692ad328b1f19e3275e2782db4fa07670d83f35e0",
+      "validation": {
+        "russianAlphabetIncludingYo": true,
+        "latinAlphabet": true,
+        "digits": true,
+        "rubleSign": true,
+        "unicodeCodepoints": 974,
+        "variableAxes": {
+          "wght": [
+            300.0,
+            300.0,
+            700.0
+          ]
+        },
+        "roundtripCmapAndAxesPreserved": true,
+        "italicFlag": false
+      }
+    },
+    {
+      "family": "Cormorant Garamond",
+      "style": "italic",
+      "weightRange": [
+        300,
+        700
+      ],
+      "file": "cormorant-garamond-italic-variable.woff2",
+      "bytes": 143644,
+      "sha256": "b25fd6a66314122257980ac9fd0fa56c2cfb73970b09acdce214e1b18fb2f51d",
+      "sourceUrl": "https://raw.githubusercontent.com/google/fonts/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/cormorantgaramond/CormorantGaramond-Italic%5Bwght%5D.ttf",
+      "sourceSha256": "0f48ea6abb2084537854f7174c470991a463b13036309e3b50a81511611c530d",
+      "validation": {
+        "russianAlphabetIncludingYo": true,
+        "latinAlphabet": true,
+        "digits": true,
+        "rubleSign": true,
+        "unicodeCodepoints": 979,
+        "variableAxes": {
+          "wght": [
+            300.0,
+            300.0,
+            700.0
+          ]
+        },
+        "roundtripCmapAndAxesPreserved": true,
+        "italicFlag": true
+      }
+    },
+    {
+      "family": "Manrope",
+      "style": "normal",
+      "weightRange": [
+        200,
+        800
+      ],
+      "file": "manrope-variable.woff2",
+      "bytes": 53892,
+      "sha256": "30b83738add8c9edd9e3450b98036a9a8fb5668d0cbd4eb0ce5fe6761197f21f",
+      "sourceUrl": "https://raw.githubusercontent.com/google/fonts/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/manrope/Manrope%5Bwght%5D.ttf",
+      "sourceSha256": "3ae11c49db0455a3cc33e37d380f20fdb8c7f8b41dc07625c177e3d87a9d6ae6",
+      "validation": {
+        "russianAlphabetIncludingYo": true,
+        "latinAlphabet": true,
+        "digits": true,
+        "rubleSign": true,
+        "unicodeCodepoints": 678,
+        "variableAxes": {
+          "wght": [
+            200.0,
+            200.0,
+            800.0
+          ]
+        },
+        "roundtripCmapAndAxesPreserved": true,
+        "italicFlag": false
+      }
+    }
+  ],
+  "licenses": [
+    {
+      "file": "OFL-Cormorant-Garamond.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/google/fonts/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/cormorantgaramond/OFL.txt",
+      "sha256": "60700d351cac4650c51f3f9db318d2a420f8b45052dba2715eb5fec41f0f6956"
+    },
+    {
+      "file": "OFL-Manrope.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/google/fonts/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/manrope/OFL.txt",
+      "sha256": "58172e0c0fac2cda8a37b348164bb55e44b0e69051e557e92b1d3f6910141f7b"
+    }
+  ]
+}
