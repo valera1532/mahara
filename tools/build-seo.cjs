@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const config = require('../seo.config.json');
-const { products, card } = require('../catalog-data.js');
+const { products, card, fitAdvice } = require('../catalog-data.js');
 const origin = new URL(config.siteUrl);
 if (origin.protocol !== 'https:' || origin.search || origin.hash || origin.pathname !== '/') {
   throw new Error('siteUrl must be the HTTPS origin, with a trailing slash');
@@ -48,11 +48,11 @@ function head({ file, title, description, image = 'assets/images/social-cover.jp
   <meta name="twitter:image" content="${url(image)}" />
   <meta name="twitter:image:alt" content="${escape(title)}" />
   <link rel="icon" href="assets/icons/favicon.svg?v=20261019-1" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=20261019-1" />${galleryStyles}
+  <link rel="stylesheet" href="styles.css?v=20261020-1" />${galleryStyles}
   <script type="application/ld+json">${JSON.stringify({ '@context': 'https://schema.org', '@graph': graph }).replace(/</g, '\\u003c')}</script>
-  <script defer src="catalog-data.js?v=20261011-2"></script>${galleryScripts}
+  <script defer src="catalog-data.js?v=20261020-1"></script>${galleryScripts}
   <script defer src="cms-data.js?v=${cmsVersion}"></script>
-  <script defer src="script.js?v=20261012-1"></script>
+  <script defer src="script.js?v=20261020-1"></script>
 </head>`;
 }
 
@@ -118,6 +118,7 @@ for (const product of products) {
           <p class="product-detail__description">${escape(product.description)}</p>
           <strong class="product-detail__price">${new Intl.NumberFormat('ru-RU').format(product.price)} ₽</strong>
           <dl class="product-detail__facts"><div><dt>Цвет</dt><dd>${colorNames[product.color]}</dd></div><div><dt>Размеры</dt><dd>${product.sizes.join(', ')}</dd></div><div><dt>Линия</dt><dd>${escape(product.subtitle)}</dd></div></dl>
+          ${fitAdvice}
           <div class="product-card__sizes js-only" role="group" aria-label="Выбрать размер">${sizes}</div>
           <button class="button button--primary js-only" type="button" data-add-cart aria-label="Добавить ${escape(product.title)} в корзину">Добавить в корзину <span aria-hidden="true">↗</span></button>
           <a class="product-detail__back" href="catalog.html">Вернуться в каталог <span aria-hidden="true">→</span></a>

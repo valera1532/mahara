@@ -6,7 +6,7 @@
     try { window.MaharaCMS.apply(await window.MaharaCMS.load({ preferEmbedded: true })); }
     catch { /* Keep the server-rendered storefront usable if the API is temporarily unavailable. */ }
   }
-  const { products: PRODUCTS, card: productCard } = window.MaharaCatalog;
+  const { products: PRODUCTS, card: productCard, fitAdvice } = window.MaharaCatalog;
   const escapeHTML = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 
   const $ = (selector, root = document) => root.querySelector(selector);
@@ -583,6 +583,7 @@
     $('[data-quick-label]', modal).textContent = product.label;
 
     const sizesNode = $('[data-quick-sizes]', modal);
+    if (!$('.fit-advice', modal)) sizesNode.insertAdjacentHTML('beforebegin', fitAdvice);
     const restoreSizeFocus = sizesNode.contains(document.activeElement);
     sizesNode.innerHTML = product.sizes.map(size =>
       `<button type="button" class="${size === state.quickSize ? 'is-active' : ''}" data-quick-size="${size}" aria-pressed="${size === state.quickSize}" aria-label="Размер ${size}">${size}</button>`

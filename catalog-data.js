@@ -179,6 +179,7 @@
   }
 ];
   const escape = value => String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+  const fitAdvice = '<aside class="fit-advice"><span class="fit-advice__label">Свободный крой</span><p>Для более привычной посадки рекомендуем выбрать <strong>на размер меньше.</strong></p></aside>';
   function card(product) {
     const title = escape(product.title);
     const sizes = product.sizes.map((size, index) => `<button type="button" data-size-choice="${size}" class="${index === 1 ? 'is-active' : ''}" aria-pressed="${index === 1}" aria-label="Размер ${size}">${size}</button>`).join('');
@@ -191,6 +192,7 @@
       </div>
       <div class="product-card__body">
         <span class="product-card__label">${product.category === 'hoodie' ? 'Худи / Вышивка' : 'Футболка / Арт'}</span>
+        <span class="product-card__fit">Свободный крой</span>
         <h3><a href="${product.url}">${title}</a></h3>
         <p class="product-card__subtitle">${escape(product.subtitle)}</p>
         <strong class="product-card__price">${new Intl.NumberFormat('ru-RU').format(product.price)} ₽</strong>
@@ -200,5 +202,5 @@
       </div>
     </article>`;
   }
-  return { products, card };
+  return { products, card, fitAdvice };
 });

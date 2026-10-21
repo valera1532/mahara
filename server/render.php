@@ -173,6 +173,7 @@ function mhRenderCard(array $product): string
   </div>
   <div class="product-card__body">
     <span class="product-card__label">{$category}</span>
+    <span class="product-card__fit">Свободный крой</span>
     <h3><a href="{$p['url']}">{$title}</a></h3>
     <p class="product-card__subtitle">{$p['subtitle']}</p>
     <strong class="product-card__price">{$price}</strong>
@@ -240,6 +241,7 @@ function mhRenderProduct(array $product): string
         <p class="product-detail__description">{$p['description']}</p>
         <strong class="product-detail__price">{$price}</strong>
         <dl class="product-detail__facts"><div><dt>Цвет</dt><dd>{$color}</dd></div><div><dt>Размеры</dt><dd>{$availableSizes}</dd></div><div><dt>Линия</dt><dd>{$p['subtitle']}</dd></div>{$facts}</dl>
+        <aside class="fit-advice"><span class="fit-advice__label">Свободный крой</span><p>Для более привычной посадки рекомендуем выбрать <strong>на размер меньше.</strong></p></aside>
         <div class="product-card__sizes js-only" role="group" aria-label="Выбрать размер">{$sizes}</div>
         <button class="button button--primary js-only" type="button" data-add-cart aria-label="Добавить {$p['title']} в корзину">Добавить в корзину <span aria-hidden="true">↗</span></button>
         <a class="product-detail__back" href="catalog.html">Вернуться в каталог <span aria-hidden="true">→</span></a>
@@ -337,11 +339,11 @@ function mhRenderHead(string $route, array $sections, array $products, ?array $p
   <meta name="twitter:image" content="{$eImage}" />
   <meta name="twitter:image:alt" content="{$eTitle}" />
   <link rel="icon" href="assets/icons/favicon.svg?v=20261019-1" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=20261019-1" />{$galleryStyles}
+  <link rel="stylesheet" href="styles.css?v=20261020-1" />{$galleryStyles}
   <script type="application/ld+json">{$json}</script>
-  <script defer src="catalog-data.js?v=20261011-2"></script>{$galleryScripts}
+  <script defer src="catalog-data.js?v=20261020-1"></script>{$galleryScripts}
   <script defer src="cms-data.js?v={$cmsVersion}"></script>
-  <script defer src="script.js?v=20261012-1"></script>
+  <script defer src="script.js?v=20261020-1"></script>
 </head>
 HTML;
 }
