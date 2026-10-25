@@ -347,6 +347,10 @@
       previewNode.innerHTML = `<article class="cms-mini-product"><div class="cms-mini-product__photo">${photo ? `<img src="${escapeHTML(photo)}" alt="${text('title')}" />` : '<div class="cms-mini-product__placeholder">Загрузите фотографию товара</div>'}${content.label ? `<span class="cms-mini-product__badge">${text('label')}</span>` : ''}</div><div class="cms-mini-product__body"><span class="cms-mini-product__label">${content.category === 'hoodie' ? 'Худи' : 'Футболка'} / ${escapeHTML(colors.find(color => color[0] === content.color)?.[1] || '')}</span><h3>${text('title') || 'Название товара'}</h3><p class="cms-mini-product__subtitle">${text('subtitle')}</p><strong class="cms-mini-product__price">${content.price !== '' && Number.isFinite(price) ? `${new Intl.NumberFormat('ru-RU').format(price)} ₽` : '— ₽'}</strong><div class="cms-mini-product__sizes">${content.sizes.map(size => `<span>${escapeHTML(size)}</span>`).join('')}</div><p class="cms-mini-product__description">${text('description')}</p>${facts}</div></article>`;
       return;
     }
+    if (selection.id === 'categories') {
+      previewNode.innerHTML = `<div class="cms-mini-categories">${[['Худи', 'hoodieImage', 'hoodieSecondaryImage'], ['Футболки', 'teeImage', 'teeSecondaryImage']].map(([title, main, secondary]) => `<article class="cms-mini-category"><h3>${title}</h3><div class="cms-mini-category__photos">${[[main, 'Главное фото'], [secondary, 'Второе фото']].map(([key, label]) => `<figure><img src="${text(key)}" alt="${title} — ${label.toLowerCase()}" data-cms-preview-category-image="${key}" /><figcaption>${label}</figcaption></figure>`).join('')}</div></article>`).join('')}</div>`;
+      return;
+    }
     const eyebrow = `<p class="cms-mini-block__eyebrow">${text('eyebrow')}</p>`;
     const heading = `<h3>${text('title') || 'Ваш заголовок'}${content.accent ? `<br><em>${text('accent')}</em>` : ''}${content.subtitle ? `<br><em>${text('subtitle')}</em>` : ''}</h3>`;
     const description = content.description ? `<p class="cms-mini-block__description">${text('description')}</p>` : '';

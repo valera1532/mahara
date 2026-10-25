@@ -23,7 +23,7 @@ const crumbs = items => ({ '@type': 'BreadcrumbList', itemListElement: items.map
 function head({ file, title, description, image = 'assets/images/social-cover.jpg', imageWidth = 1200, imageHeight = 630, graph, type = 'website' }) {
   const galleryStyles = file.startsWith('product-') ? '\n  <link rel="stylesheet" href="/assets/vendor/swiper/swiper-bundle.min.css?v=14.3.0" />\n  <link rel="stylesheet" href="/product-gallery.css?v=20261015-1" />' : '';
   const galleryScripts = file.startsWith('product-') ? '\n  <script defer src="/assets/vendor/swiper/swiper-bundle.min.js?v=14.3.0"></script>\n  <script defer src="/product-gallery.js?v=20261015-2"></script>' : '';
-  const cmsVersion = '20261015-2';
+  const cmsVersion = '20261025-1';
   return `<head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />

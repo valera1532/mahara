@@ -22,6 +22,12 @@
         image: 'assets/images/hero-man.webp',
         secondaryImage: 'assets/images/hero-woman.webp'
       },
+      categories: {
+        hoodieImage: 'assets/images/hero-man.webp',
+        hoodieSecondaryImage: 'assets/images/green-hoodie-back.webp',
+        teeImage: 'assets/images/slate-tee.webp',
+        teeSecondaryImage: 'assets/images/white-last-supper.webp'
+      },
       campaign: {
         eyebrow: 'Campaign 001',
         title: 'Не просто одежда',
@@ -53,6 +59,10 @@
       field('eyebrow', 'Текст над заголовком'), field('title', 'Заголовок'), field('subtitle', 'Подзаголовок'),
       field('description', 'Описание', 'textarea'), field('button', 'Текст кнопки'),
       field('image', 'Фотография слева', 'image'), field('secondaryImage', 'Фотография справа', 'image')
+    ] },
+    { id: 'categories', title: 'Худи и футболки', description: 'По два фото для карточек «Худи» и «Футболки» на главной.', fields: [
+      field('hoodieImage', 'Худи — главное фото', 'image'), field('hoodieSecondaryImage', 'Худи — второе фото', 'image'),
+      field('teeImage', 'Футболки — главное фото', 'image'), field('teeSecondaryImage', 'Футболки — второе фото', 'image')
     ] },
     { id: 'campaign', title: 'Кампания', description: 'Большой блок с фотографией коллекции.', fields: [
       field('eyebrow', 'Подпись'), field('title', 'Заголовок'), field('accent', 'Акцентная строка'),
@@ -172,9 +182,12 @@
     if (multiline) element.style.whiteSpace = 'pre-line';
   }
 
-  function image(selector, value) {
+  function image(selector, value, clearSrcset = false) {
     const element = document.querySelector(selector);
-    if (element) element.src = value;
+    if (element) {
+      if (clearSrcset) element.removeAttribute('srcset');
+      element.src = value;
+    }
   }
 
   function heading(selector, title, accent) {
@@ -193,7 +206,7 @@
       const products = grid.dataset.productGrid === 'featured' ? value.products.slice(0, 4) : value.products;
       grid.innerHTML = products.map(window.MaharaCatalog.card).join('');
     });
-    const { hero, campaign, story, newsletter } = value.sections;
+    const { hero, categories, campaign, story, newsletter } = value.sections;
     text('.hero__content > .eyebrow', hero.eyebrow);
     text('.hero-title__main', hero.title);
     const heroTitle = document.querySelector('.hero-title__main');
@@ -203,6 +216,10 @@
     text('.hero__actions .button--primary span', hero.button);
     image('.hero-photo--left img', hero.image);
     image('.hero-photo--right img', hero.secondaryImage);
+    image('#hoodies .category-card__front', categories.hoodieImage, true);
+    image('#hoodies .category-card__back', categories.hoodieSecondaryImage, true);
+    image('#tshirts .category-card__front', categories.teeImage, true);
+    image('#tshirts .category-card__back', categories.teeSecondaryImage, true);
     text('.campaign__content > .eyebrow', campaign.eyebrow);
     heading('.campaign__content h2', campaign.title, campaign.accent);
     text('.campaign__content > p:not(.eyebrow)', campaign.description, true);

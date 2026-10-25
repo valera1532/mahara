@@ -5,9 +5,9 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const source = fs.readFileSync(require('node:path').join(__dirname, '..', 'cms-data.js'), 'utf8');
 const defaults = require('../site-defaults.json');
-function client(fetch) {
+function client(fetch, document = {getElementById(){return null;}}) {
   const sandbox = {window:{MaharaCatalog:{...require('../catalog-data.js'),products:structuredClone(defaults.products)},dispatchEvent(){}}, fetch,
-    document:{getElementById(){return null;}}, CustomEvent:class {}, Event:class {}};
+    document, CustomEvent:class {}, Event:class {}};
   vm.runInNewContext(source,sandbox);
   return sandbox.window.MaharaCMS;
 }
@@ -83,4 +83,53 @@ test('photo helper preserves unique order and rejects external or unsafe paths',
   const api=client(async()=>({ok:true,json:async()=>defaults}));
   const value=api.productImages({images:['assets/uploads/two.png','https://other.example/a.jpg','assets/uploads/../secret.jpg','assets/uploads/one.webp','assets/uploads/two.png']});
   assert.deepEqual(JSON.parse(JSON.stringify(value)),['assets/uploads/two.png','assets/uploads/one.webp']);
+});
+
+test('legacy and partial category photos fall back independently without accepting unsafe paths',async()=>{
+  const content=structuredClone(defaults);
+  delete content.sections.categories;
+  const api=client(async()=>({ok:true,json:async()=>content}));
+  const expected=api.getDefaults().sections.categories;
+  assert.deepEqual(JSON.parse(JSON.stringify((await api.load()).sections.categories)),JSON.parse(JSON.stringify(expected)));
+  content.sections.categories={hoodieImage:'assets/uploads/hoodie.webp',hoodieSecondaryImage:'https://other.example/hoodie.jpg',teeImage:'assets/uploads/../secret.png'};
+  const loaded=await api.load();
+  assert.equal(loaded.sections.categories.hoodieImage,'assets/uploads/hoodie.webp');
+  for (const key of ['hoodieSecondaryImage','teeImage','teeSecondaryImage']) assert.equal(loaded.sections.categories[key],expected[key]);
+});
+
+test('all four category photos survive load and save without changing hero or product photos',async()=>{
+  const content={...structuredClone(defaults),revision:12};
+  const categories={hoodieImage:'assets/uploads/hoodie-main.jpg',hoodieSecondaryImage:'assets/uploads/hoodie-back.png',teeImage:'assets/uploads/tee-main.webp',teeSecondaryImage:'assets/uploads/tee-back.jpg'};
+  content.sections.categories=categories;
+  const calls=[];
+  const api=client(async(url,options)=>{
+    calls.push({url,options});
+    return {ok:true,json:async()=>url.endsWith('/session')?{csrfToken:'csrf'}:content};
+  });
+  const loaded=await api.load();
+  const saved=await api.save(loaded);
+  const payload=JSON.parse(calls.find(call=>call.options?.method==='PUT').options.body);
+  assert.deepEqual(payload.sections.categories,categories);
+  assert.deepEqual(JSON.parse(JSON.stringify(saved.sections.categories)),categories);
+  assert.deepEqual(payload.sections.hero,content.sections.hero);
+  assert.equal(saved.products[0].image,content.products[0].image);
+  assert.equal(saved.products[0].altImage,content.products[0].altImage);
+});
+
+test('category hydration updates all four images and removes stale srcset on every apply',()=>{
+  const mapping={'#hoodies .category-card__front':'hoodieImage','#hoodies .category-card__back':'hoodieSecondaryImage','#tshirts .category-card__front':'teeImage','#tshirts .category-card__back':'teeSecondaryImage'};
+  const nodes=Object.fromEntries(Object.keys(mapping).map(selector=>[selector,{src:'old.jpg',attributes:new Map([['srcset','old-large.jpg 2x']]),removeAttribute(name){this.attributes.delete(name);}}]));
+  const document={getElementById(){return null;},querySelector(selector){return nodes[selector]||null;},querySelectorAll(){return [];}};
+  const api=client(async()=>{throw new Error('No network expected');},document);
+  const content=api.getDefaults();
+  for (const key of Object.values(mapping)) content.sections.categories[key]=`assets/uploads/${key}.webp`;
+  api.apply(content);
+  for (const [selector,key] of Object.entries(mapping)) {
+    assert.equal(nodes[selector].src,content.sections.categories[key]);
+    assert.equal(nodes[selector].attributes.has('srcset'),false);
+  }
+  content.sections.categories.teeSecondaryImage='assets/uploads/updated-tee.webp';
+  api.apply(content);
+  assert.equal(nodes['#tshirts .category-card__back'].src,'assets/uploads/updated-tee.webp');
+  assert.equal(nodes['#hoodies .category-card__front'].src,content.sections.categories.hoodieImage);
 });

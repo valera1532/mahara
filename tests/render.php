@@ -109,10 +109,10 @@ verify(value($xpath, $gallery . '//*[@data-gallery-current]') === '01' && value(
 verify((int) $xpath->evaluate('count(' . $gallery . '//button[@data-gallery-thumb])') === 2 && value($xpath, $gallery . '//button[@data-gallery-thumb="0"]/@aria-pressed') === 'true' && value($xpath, $gallery . '//button[@data-gallery-thumb="1"]/@aria-pressed') === 'false', 'Thumbnail selection matches the first slide.');
 verify(value($xpath, $gallery . '//button[@data-gallery-thumb="1"]/@aria-label') === 'Показать фото 2' && (int) $xpath->evaluate('count(' . $gallery . '//button[@data-gallery-thumb]/img[@alt=""])') === 2, 'Thumbnail controls have accessible labels and decorative images.');
 foreach (['/assets/vendor/swiper/swiper-bundle.min.css?v=14.3.0', '/product-gallery.css?v=20261015-1'] as $asset) verify((int) $xpath->evaluate('count(//head/link[@rel="stylesheet" and @href="' . $asset . '"])') === 1, 'Product gallery stylesheet is loaded once.');
-foreach (['/assets/vendor/swiper/swiper-bundle.min.js?v=14.3.0', '/product-gallery.js?v=20261015-2', 'cms-data.js?v=20261015-2'] as $asset) verify((int) $xpath->evaluate('count(//head/script[@defer and @src="' . $asset . '"])') === 1, 'Product gallery scripts use the matching cache version.');
+foreach (['/assets/vendor/swiper/swiper-bundle.min.js?v=14.3.0', '/product-gallery.js?v=20261015-2', 'cms-data.js?v=20261025-1'] as $asset) verify((int) $xpath->evaluate('count(//head/script[@defer and @src="' . $asset . '"])') === 1, 'Product gallery scripts use the matching cache version.');
 verify(strpos($detail, '/swiper-bundle.min.js?') < strpos($detail, '/product-gallery.js?') && strpos($detail, '/product-gallery.js?') < strpos($detail, 'cms-data.js?'), 'Gallery controller loads after its vendor and before the CMS repaint.');
 verify(!str_contains($home, 'swiper-bundle') && !str_contains($catalog, 'swiper-bundle'), 'Non-product pages do not load gallery dependencies.');
-verify(str_contains($home, 'cms-data.js?v=20261015-2') && str_contains($catalog, 'cms-data.js?v=20261015-2'), 'All public SSR pages load the multi-photo CMS normalizer.');
+verify(str_contains($home, 'cms-data.js?v=20261025-1') && str_contains($catalog, 'cms-data.js?v=20261025-1'), 'All public SSR pages load the current CMS normalizer.');
 verify((int) $xpath->evaluate('count(//*[@data-size-choice])') === 1, 'Dynamic product sizes are current.');
 $schema = json_decode(value($xpath, '//script[@type="application/ld+json"]'), true, 512, JSON_THROW_ON_ERROR);
 $schemaProducts = array_values(array_filter($schema['@graph'], static fn(array $node): bool => $node['@type'] === 'Product'));
@@ -150,7 +150,7 @@ foreach ($defaults['products'] as $staticProduct) {
     verify($actualImages === $expectedImages, 'Static gallery uses unique images in published order: ' . $staticProduct['url']);
     verify((int) $static->evaluate('count(' . $gallery . '//button[@data-gallery-thumb])') === (count($expectedImages) > 1 ? count($expectedImages) : 0), 'Static single/multiple image controls match the slide count.');
     verify(value($static, '(' . $slides . ')[1]/img/@loading') === 'eager' && value($static, '(' . $slides . ')[1]/img/@fetchpriority') === 'high', 'Static first image keeps loading priority.');
-    verify(str_contains($staticHtml, '/swiper-bundle.min.css?v=14.3.0') && str_contains($staticHtml, '/product-gallery.css?v=20261015-1') && str_contains($staticHtml, '/product-gallery.js?v=20261015-2') && str_contains($staticHtml, 'cms-data.js?v=20261015-2') && strpos($staticHtml, '/swiper-bundle.min.js?') < strpos($staticHtml, '/product-gallery.js?') && strpos($staticHtml, '/product-gallery.js?') < strpos($staticHtml, 'cms-data.js?'), 'Static gallery dependencies load in the same order as SSR.');
+    verify(str_contains($staticHtml, '/swiper-bundle.min.css?v=14.3.0') && str_contains($staticHtml, '/product-gallery.css?v=20261015-1') && str_contains($staticHtml, '/product-gallery.js?v=20261015-2') && str_contains($staticHtml, 'cms-data.js?v=20261025-1') && strpos($staticHtml, '/swiper-bundle.min.js?') < strpos($staticHtml, '/product-gallery.js?') && strpos($staticHtml, '/product-gallery.js?') < strpos($staticHtml, 'cms-data.js?'), 'Static gallery dependencies load in the same order as SSR.');
 }
 
 $sitemap = renderPage('/sitemap.xml', $content);
@@ -169,4 +169,24 @@ putenv('MAHARA_ORIGIN');
 putenv('APP_ORIGIN=https://configured.example.test');
 verify(str_contains(renderPage('/sitemap.xml', $content), 'https://configured.example.test/catalog.html'), 'Backend APP_ORIGIN also configures public canonical URLs.');
 putenv('APP_ORIGIN');
+$categoryContent = $defaults;
+$categoryContent['revision'] = 23;
+$categorySelectors = [
+    'hoodieImage' => '//a[@id="hoodies"]//img[' . hasClass('category-card__front') . ']',
+    'hoodieSecondaryImage' => '//a[@id="hoodies"]//img[' . hasClass('category-card__back') . ']',
+    'teeImage' => '//a[@id="tshirts"]//img[' . hasClass('category-card__front') . ']',
+    'teeSecondaryImage' => '//a[@id="tshirts"]//img[' . hasClass('category-card__back') . ']',
+];
+foreach ($categorySelectors as $key => $selector) $categoryContent['sections']['categories'][$key] = 'assets/uploads/category-' . $key . '.webp';
+$categorySnapshot = $categoryContent;
+$categoryPage = document(renderPage('/', $categoryContent));
+foreach ($categorySelectors as $key => $selector) verify(value($categoryPage, $selector . '/@src') === $categoryContent['sections']['categories'][$key], 'Category photo renders without JavaScript: ' . $key);
+verify(value($categoryPage, '//a[@id="hoodies"]/@href') === 'catalog.html?category=hoodie' && value($categoryPage, '//a[@id="tshirts"]/@href') === 'catalog.html?category=tee', 'Editing category photos preserves both category links.');
+verify($categoryContent === $categorySnapshot, 'Rendering does not mutate published category settings or products.');
+$embeddedCategories = json_decode(value($categoryPage, '//script[@id="mahara-content"]'), true, 512, JSON_THROW_ON_ERROR);
+verify($embeddedCategories['sections']['categories'] === $categoryContent['sections']['categories'] && $embeddedCategories['revision'] === 23, 'Hydration receives the same saved category photos and revision as SSR.');
+unset($categoryContent['sections']['categories']);
+$legacyCategoryPage = document(renderPage('/', $categoryContent));
+foreach ($categorySelectors as $key => $selector) verify(value($legacyCategoryPage, $selector . '/@src') === $defaults['sections']['categories'][$key], 'Legacy content retains the existing category photo: ' . $key);
+
 echo "PASS: $checks storefront rendering checks\n";

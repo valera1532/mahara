@@ -4,6 +4,7 @@ declare(strict_types=1);
 // PHP 8.2+, PDO SQLite. All public routes are handled here or by router.php.
 const MAHARA_SECTION_FIELDS = [
     'hero' => ['eyebrow', 'title', 'subtitle', 'description', 'button', 'image', 'secondaryImage'],
+    'categories' => ['hoodieImage', 'hoodieSecondaryImage', 'teeImage', 'teeSecondaryImage'],
     'campaign' => ['eyebrow', 'title', 'accent', 'description', 'button', 'image'],
     'story' => ['eyebrow', 'title', 'accent', 'lead', 'description', 'image', 'secondaryImage'],
     'newsletter' => ['eyebrow', 'title', 'accent'],
@@ -108,9 +109,15 @@ function mahara_validate_content(mixed $input, bool $revision = true): array {
     mahara_object($input, $revision ? ['version', 'sections', 'products', 'revision'] : ['version', 'sections', 'products'], 'Контент');
     if ($input['version'] !== 1) mahara_fail('Неподдерживаемая версия контента.');
     if ($revision) mahara_integer($input['revision'], 1, 9007199254740991, 'Версия публикации');
-    mahara_object($input['sections'], array_keys(MAHARA_SECTION_FIELDS), 'Блоки страницы');
+    $sectionFields = MAHARA_SECTION_FIELDS;
+    if (is_array($input['sections']) && !array_key_exists('categories', $input['sections'])) {
+        // Old published documents remain readable; an old editor must not erase newer category photos.
+        if ($revision) mahara_fail('Обновите страницу перед сохранением: добавлены фотографии категорий.');
+        unset($sectionFields['categories']);
+    }
+    mahara_object($input['sections'], array_keys($sectionFields), 'Блоки страницы');
     $sections = [];
-    foreach (MAHARA_SECTION_FIELDS as $name => $fields) {
+    foreach ($sectionFields as $name => $fields) {
         mahara_object($input['sections'][$name], $fields, $name);
         foreach ($fields as $key) {
             $sections[$name][$key] = str_contains(strtolower($key), 'image')

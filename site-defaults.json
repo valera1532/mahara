@@ -10,6 +10,12 @@
       "image": "assets/images/hero-man.webp",
       "secondaryImage": "assets/images/hero-woman.webp"
     },
+    "categories": {
+      "hoodieImage": "assets/images/hero-man.webp",
+      "hoodieSecondaryImage": "assets/images/green-hoodie-back.webp",
+      "teeImage": "assets/images/slate-tee.webp",
+      "teeSecondaryImage": "assets/images/white-last-supper.webp"
+    },
     "campaign": {
       "eyebrow": "Campaign 001",
       "title": "Не просто одежда",

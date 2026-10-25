@@ -94,6 +94,13 @@
 .cms-mini-block--campaign { padding-top: 0; }
 .cms-mini-block--campaign > img { width: calc(100% + 42px); max-width: none; margin-left: -21px; height: 230px; object-fit: cover; margin-bottom: 24px; }
 .cms-mini-block--newsletter { display: flex; flex-direction: column; justify-content: center; min-height: 425px; background: radial-gradient(ellipse at 95% 100%, rgba(137,14,32,.2), transparent 80%); }
+.cms-mini-categories { display: grid; gap: 20px; padding: 20px; }
+.cms-mini-category { min-width: 0; }
+.cms-mini-category h3 { margin-bottom: 10px; font-family: var(--display); font-size: 1.6rem; font-weight: 400; }
+.cms-mini-category__photos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.cms-mini-category__photos figure { min-width: 0; margin: 0; }
+.cms-mini-category__photos img { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 6px; }
+.cms-mini-category__photos figcaption { margin-top: 7px; color: var(--muted); font-size: .62rem; line-height: 1.5; }
 .cms-mini-email { margin-top: 27px; padding: 13px 0; border-bottom: 1px solid #57494b; display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: .65rem; }
 .cms-mini-email span:last-child { color: var(--red); }
 .cms-mini-product__photo { position: relative; background: #1b1b1d; }

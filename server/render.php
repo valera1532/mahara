@@ -102,6 +102,15 @@ function mhRenderLines(mixed $text): string
 
 function mhRenderHome(string $html, array $sections): string
 {
+    foreach (['hoodies' => ['hoodieImage', 'hoodieSecondaryImage'], 'tshirts' => ['teeImage', 'teeSecondaryImage']] as $id => $keys) {
+        $html = (string) preg_replace_callback('~<a\b[^>]*\bid="' . $id . '"[^>]*>[\s\S]*?</a>~', static function (array $match) use ($sections, $keys): string {
+            $block = $match[0];
+            foreach (['front', 'back'] as $index => $layer) {
+                $block = mhRenderReplace($block, '~(<img\b[^>]*class="[^"]*\bcategory-card__' . $layer . '\b[^"]*"[^>]*\bsrc=")[^"]*(")~', mhRenderEscape($sections['categories'][$keys[$index]]), true);
+            }
+            return $block;
+        }, $html, 1);
+    }
     foreach (['hero', 'campaign', 'story', 'newsletter'] as $name) {
         $fields = $sections[$name];
         $pattern = '~<section\b[^>]*class="[^"]*\b' . $name . '\b[^"]*"[^>]*>[\s\S]*?</section>~';
@@ -313,7 +322,7 @@ function mhRenderHead(string $route, array $sections, array $products, ?array $p
     $json = mhRenderJson(['@context' => 'https://schema.org', '@graph' => $graph]);
     $galleryStyles = $product === null ? '' : "\n  <link rel=\"stylesheet\" href=\"/assets/vendor/swiper/swiper-bundle.min.css?v=14.3.0\" />\n  <link rel=\"stylesheet\" href=\"/product-gallery.css?v=20261015-1\" />";
     $galleryScripts = $product === null ? '' : "\n  <script defer src=\"/assets/vendor/swiper/swiper-bundle.min.js?v=14.3.0\"></script>\n  <script defer src=\"/product-gallery.js?v=20261015-2\"></script>";
-    $cmsVersion = '20261015-2';
+    $cmsVersion = '20261025-1';
     return <<<HTML
 <head>
   <meta charset="utf-8" />

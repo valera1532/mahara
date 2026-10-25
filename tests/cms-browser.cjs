@@ -89,6 +89,18 @@ async function save(page, expectedStatus = 200) {
   return response;
 }
 
+async function uploadCategoryPhoto(page, key, filename) {
+  const responsePromise = page.waitForResponse(response => response.url().endsWith('/api/admin/uploads') && response.request().method() === 'POST');
+  await page.locator(`[data-cms-upload="${key}"]`).setInputFiles(path.join(ROOT, 'assets/images', filename));
+  const response = await responsePromise;
+  equal(response.status(), 201, `${key}: category photo upload succeeds`);
+  const { url } = await response.json();
+  await page.locator('[data-cms-workspace][aria-busy="false"]').waitFor();
+  await imageLoaded(page, `[data-cms-field-image="${key}"]`, url);
+  await imageLoaded(page, `[data-cms-preview-category-image="${key}"]`, url);
+  return url;
+}
+
 async function discard(page) {
   await page.locator('[data-cms-reset]').click();
   await page.locator('[data-cms-reset-confirm]').click();
@@ -185,6 +197,64 @@ async function run() {
     check(await page.locator('header [data-cms-logout]').isVisible(), 'Shared editor header exposes sign out');
     equal(adminNavigation.map(text => text.trim()).sort(), ['Заказы', 'Операции', 'Контент и товары', 'Склад', 'Витрина ↗'].sort(), 'Shared header exposes every management section');
     equal(await page.locator('header [aria-current="page"]').getAttribute('href'), '/admin.html', 'Content header marks the current section');
+
+    console.log('CMS: four category photos, preview, save, reload, undo and no-JS home');
+    await page.locator('[data-cms-select="section:categories"]').click();
+    equal(await page.locator('#cms-editor-title').textContent(), 'Худи и футболки', 'Category photos have a named editor section');
+    equal(await page.locator('[data-cms-fields] [data-cms-upload]').count(), 4, 'All four category photos have upload controls');
+    equal(await page.locator('[data-cms-fields] input:not([type="file"]), [data-cms-fields] textarea').count(), 0, 'Category photo editing requires no manual URL fields');
+    equal(await page.locator('.cms-mini-category').count(), 2, 'Preview contains two category cards');
+    equal(await page.locator('.cms-mini-category__photos img').count(), 4, 'Preview exposes both photos for each category');
+    const categoryImages = {};
+    const categoryFixtures = { hoodieImage: 'hero-man.webp', hoodieSecondaryImage: 'green-hoodie-back.webp', teeImage: 'slate-tee.webp', teeSecondaryImage: 'white-last-supper.webp' };
+    for (const [key, filename] of Object.entries(categoryFixtures)) categoryImages[key] = await uploadCategoryPhoto(page, key, filename);
+    check(await page.locator('[data-cms-save]').isEnabled(), 'Category uploads mark the draft as changed');
+    const categorySave = await save(page);
+    equal(categorySave.request().postDataJSON().sections.categories, categoryImages, 'Save submits all four category photos together');
+    const categorySnapshot = await snapshot();
+    equal(categorySnapshot.sections.categories, categoryImages, 'Server persists all four category photos');
+    equal(categorySnapshot.sections.hero, initial.sections.hero, 'Category editing preserves hero content');
+    equal(categorySnapshot.products, initial.products, 'Category editing preserves the entire product catalog');
+    await page.reload({ waitUntil: 'load' });
+    await editorReady(page);
+    await page.locator('[data-cms-select="section:categories"]').click();
+    for (const [key, url] of Object.entries(categoryImages)) await imageLoaded(page, `[data-cms-preview-category-image="${key}"]`, url);
+    check(await page.locator('[data-cms-save]').isDisabled(), 'Reload restores a clean category draft');
+
+    const categoryPreviews = path.join(ROOT, '.local', 'category-images-preview');
+    fs.mkdirSync(categoryPreviews, { recursive: true });
+    await noOverflow(page, 'Category editor desktop');
+    await page.evaluate(() => scrollTo(0, 0));
+    await page.screenshot({ path: path.join(categoryPreviews, 'admin-categories-desktop.png'), fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await noOverflow(page, 'Category editor mobile');
+    await page.evaluate(() => scrollTo(0, 0));
+    await page.screenshot({ path: path.join(categoryPreviews, 'admin-categories-mobile.png'), fullPage: true });
+    await page.setViewportSize({ width: 1440, height: 1000 });
+
+    await uploadCategoryPhoto(page, 'hoodieImage', 'hero-woman.webp');
+    await page.locator('[data-cms-image-reset="hoodieImage"]').click();
+    await imageLoaded(page, '[data-cms-preview-category-image="hoodieImage"]', categoryImages.hoodieImage);
+    check(await page.locator('[data-cms-save]').isDisabled(), 'Individual category photo reset restores the saved baseline');
+    const unsavedCategoryImage = await uploadCategoryPhoto(page, 'teeSecondaryImage', 'black-hoodie.webp');
+    await page.locator('[data-cms-reset]').click();
+    await page.locator('[data-cms-reset-cancel]').click();
+    await imageLoaded(page, '[data-cms-preview-category-image="teeSecondaryImage"]', unsavedCategoryImage);
+    check(await page.locator('[data-cms-save]').isEnabled(), 'Canceling reset preserves the unsaved category photo');
+    await discard(page);
+    await imageLoaded(page, '[data-cms-preview-category-image="teeSecondaryImage"]', categoryImages.teeSecondaryImage);
+    equal((await snapshot()).sections.categories, categoryImages, 'Canceled or discarded edits never rewrite the published category photos');
+
+    const categoryNoJS = await browser.newContext({ javaScriptEnabled: false });
+    await categoryNoJS.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
+    const categoryHome = await categoryNoJS.newPage();
+    const categoryHomeResponse = await categoryHome.goto(origin + '/', { waitUntil: 'load' });
+    equal(categoryHomeResponse.status(), 200, 'Home with category uploads renders without JavaScript');
+    for (const [selector, key] of Object.entries({ '#hoodies .category-card__front': 'hoodieImage', '#hoodies .category-card__back': 'hoodieSecondaryImage', '#tshirts .category-card__front': 'teeImage', '#tshirts .category-card__back': 'teeSecondaryImage' })) {
+      equal(await categoryHome.locator(selector).getAttribute('src'), categoryImages[key], `${key}: no-JS home renders the saved photo`);
+      equal(await categoryHome.locator(selector).getAttribute('srcset'), null, `${key}: stale responsive source cannot override the saved photo`);
+    }
+    await categoryNoJS.close();
 
     console.log('CMS: warehouse creation can be abandoned without form validation');
     await page.locator('header a[href="/inventory.html"]').click();
