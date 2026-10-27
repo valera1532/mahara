@@ -92,17 +92,17 @@ function mahara_telegram_poll(): void {
     mahara_telegram_schema();
     $storedCursor = mahara_query("SELECT value FROM order_telegram_state WHERE name='update_cursor'")->fetchColumn();
     $cursor = $storedCursor === false ? -1 : (int)$storedCursor;
-    $updates = mahara_telegram_request('getUpdates', ['offset' => $cursor + 1, 'limit' => 100, 'timeout' => 0, 'allowed_updates' => ['message']]);
+    $updates = mahara_telegram_request('getUpdates', ['offset' => $cursor + 1, 'limit' => 100, 'timeout' => 0, 'allowed_updates' => ['message', 'callback_query']]);
     if (!array_is_list($updates) || count($updates) > 100) throw new MaharaTelegramDeliveryError();
     foreach ($updates as $update) if (!is_array($update) || !is_int($update['update_id'] ?? null) || $update['update_id'] < 0) throw new MaharaTelegramDeliveryError();
     usort($updates, static fn(array $a, array $b): int => $a['update_id'] <=> $b['update_id']);
-    $db = mahara_db(); $db->exec('BEGIN IMMEDIATE');
+    $db = mahara_db(); $db->exec('BEGIN IMMEDIATE'); $menuUpdates = [];
     try {
         $storedCursor = mahara_query("SELECT value FROM order_telegram_state WHERE name='update_cursor'")->fetchColumn();
         $cursor = $storedCursor === false ? -1 : (int)$storedCursor;
         foreach ($updates as $update) {
             if ($update['update_id'] <= $cursor) continue;
-            $cursor = $update['update_id']; $message = $update['message'] ?? null;
+            $cursor = $update['update_id']; $menuUpdates[] = $update; $message = $update['message'] ?? null;
             if (!is_array($message) || ($message['chat']['type'] ?? null) !== 'private' || ($message['from']['is_bot'] ?? null) !== false
                 || !is_int($message['chat']['id'] ?? null) || $message['chat']['id'] <= 0 || ($message['from']['id'] ?? null) !== $message['chat']['id']
                 || !is_string($message['from']['username'] ?? null) || !in_array(strtolower($message['from']['username']), $allowed, true) || !is_string($message['text'] ?? null)) continue;
@@ -116,6 +116,10 @@ function mahara_telegram_poll(): void {
         mahara_query("INSERT INTO order_telegram_state(name,value) VALUES('update_cursor',?) ON CONFLICT(name) DO UPDATE SET value=excluded.value", [(string)$cursor]);
         $db->exec('COMMIT');
     } catch (Throwable $error) { try { $db->exec('ROLLBACK'); } catch (Throwable) {} throw $error; }
+    foreach ($menuUpdates as $update) {
+        try { mahara_telegram_menu_handle($update); }
+        catch (Throwable) { error_log('MAHARA Telegram menu delivery failed.'); }
+    }
 }
 
 function mahara_telegram_schedule(string $id, string $event, string $occurrence = ''): bool {
@@ -188,7 +192,7 @@ function mahara_telegram_message(array $job, array $row): string {
 }
 
 function mahara_telegram_request(string $method, array $payload): array {
-    if (!in_array($method, ['sendMessage', 'getUpdates'], true)) throw new MaharaTelegramDeliveryError();
+    if (!in_array($method, ['sendMessage', 'getUpdates', 'editMessageText', 'answerCallbackQuery', 'setMyCommands', 'setChatMenuButton'], true)) throw new MaharaTelegramDeliveryError();
     try {
         if (defined('MAHARA_LIBRARY_ONLY') && is_callable($GLOBALS['mahara_telegram_test_transport'] ?? null)) {
             $response = ($GLOBALS['mahara_telegram_test_transport'])($method, $payload);
@@ -209,10 +213,14 @@ function mahara_telegram_request(string $method, array $payload): array {
                     }]);
                 $ok = @curl_exec($curl); $status = (int)curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
             } finally { curl_close($curl); }
-            if ($ok === false || $tooLarge || ($status !== 200 && $status !== 429)) throw new MaharaTelegramDeliveryError();
+            if ($ok === false || $tooLarge || ($status !== 200 && $status !== 429 && !($method === 'editMessageText' && $status === 400))) throw new MaharaTelegramDeliveryError();
             $response = json_decode($body, true, 32, JSON_THROW_ON_ERROR);
             if ($status === 429 && ($response['ok'] ?? null) !== false) throw new MaharaTelegramDeliveryError();
         }
+        if ($method === 'editMessageText' && is_array($response) && ($response['ok'] ?? null) === false
+            && ($response['error_code'] ?? null) === 400 && is_string($response['description'] ?? null)
+            && str_starts_with($response['description'], 'Bad Request: message is not modified')) return [];
+        if (in_array($method, ['answerCallbackQuery', 'setMyCommands', 'setChatMenuButton'], true) && is_array($response) && ($response['ok'] ?? null) === true && ($response['result'] ?? null) === true) return [];
         if (!is_array($response) || ($response['ok'] ?? null) !== true || !is_array($response['result'] ?? null)) {
             $wait = is_array($response) && ($response['error_code'] ?? null) === 429 ? ($response['parameters']['retry_after'] ?? 0) : 0;
             throw new MaharaTelegramDeliveryError(is_int($wait) ? max(0, min(604800, $wait)) : 0);
@@ -261,3 +269,5 @@ function mahara_telegram_work(int $limit = 3): array {
     }
     return ['enabled' => true, 'sent' => $sent, 'failed' => $failed];
 }
+
+require_once __DIR__ . '/telegram-menu.php';

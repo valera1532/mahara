@@ -40,6 +40,7 @@ copy('tools/commerce.php');
 copy('tools/tbank.php');
 copy('tools/notifications.php');
 copy('tools/telegram.php');
+copy('tools/telegram-menu.php');
 copy('tools/backup.php');
 copy('server/certs/tbank-ca.pem');
 for (const file of ['swiper-bundle.min.js', 'swiper-bundle.min.css', 'LICENSE', 'SOURCE.json']) copy(`assets/vendor/swiper/${file}`);

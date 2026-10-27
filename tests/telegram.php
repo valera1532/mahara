@@ -225,7 +225,7 @@ $makeUpdate = static fn(int $number, int $chat, string $username, string $text, 
 $GLOBALS['mahara_telegram_test_transport'] = static function (string $method, array $payload) use (&$updates, &$polls, &$pollFailure, $transport): array {
     if ($method !== 'getUpdates') return $transport($method, $payload);
     $polls[] = $payload;
-    telegram_verify($payload['timeout'] === 0 && $payload['limit'] === 100 && $payload['allowed_updates'] === ['message'], 'Subscription polling is bounded and reads message updates only.');
+    telegram_verify($payload['timeout'] === 0 && $payload['limit'] === 100 && $payload['allowed_updates'] === ['message', 'callback_query'], 'Polling reads bounded messages and menu button callbacks.');
     telegram_verify(!mahara_db()->inTransaction(), 'Subscription polling runs outside database write transactions.');
     if ($pollFailure) throw new RuntimeException('Private polling failure: FAKE_TOKEN provider response');
     return ['ok' => true, 'result' => $updates];
@@ -243,7 +243,8 @@ $updates = [
     $makeUpdate(6, 70707, 'serg_kharakhorin', '/start@Another_test_bot'),
 ];
 $before = count($messages);
-telegram_verify(mahara_telegram_work(20)['sent'] === 0 && count($messages) === $before, 'Polling subscriptions sends no acknowledgements or historical orders.');
+telegram_verify(mahara_telegram_work(20)['sent'] === 0 && count($messages) === $before + 2, 'Start shows the menu to each approved owner without sending historical orders.');
+foreach (array_slice($messages, $before) as $menuMessage) telegram_verify(isset($menuMessage['reply_markup']['inline_keyboard']) && !str_contains($menuMessage['text'], 'PRIVATE-'), 'Start replies contain the owner menu without order or customer data.');
 telegram_verify(mahara_telegram_subscribers() === ['10101', '20202'], 'Only private, non-bot allowlisted owners with matching sender/chat IDs subscribe.');
 telegram_verify((int)mahara_query('SELECT COUNT(*) FROM order_telegram_subscribers')->fetchColumn() === 2, 'Unknown users and invalid chats are not stored as subscribers.');
 telegram_verify(mahara_query("SELECT value FROM order_telegram_state WHERE name='update_cursor'")->fetchColumn() === '6' && $polls[0]['offset'] === 0, 'The persistent cursor advances across accepted and ignored updates.');
