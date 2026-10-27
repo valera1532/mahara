@@ -93,7 +93,7 @@ $GLOBALS['mahara_mail_test_transport'] = static function (string $recipient, str
 
 notification_verify(mahara_config()['data_dir'] === $fixtureDir && mahara_config()['origin'] === 'https://shop.example.test', 'Complete test configuration overrides private files.');
 mahara_notifications_schema();
-$id = 'fixture-order-1'; $accessToken = mahara_random_token(); $now = time();
+$id = 'a123456789abcdef0123456789abcdef'; $accessToken = mahara_random_token(); $now = time();
 $order = [
     'id' => $id, 'number' => 'MH-FIXTURE-1', 'request_id' => 'fixture-order-request', 'request_payload' => '{}', 'access_token' => $accessToken,
     'items_json' => json_encode([['id' => 'hoodie-black', 'size' => 'M', 'qty' => 2, 'title' => 'Тестовое худи', 'image' => 'assets/images/black-hoodie.webp', 'unitAmount' => 1690000, 'amount' => 3380000]], JSON_THROW_ON_ERROR),
@@ -133,6 +133,22 @@ notification_verify(str_contains($messages[0]['body'], '33 800,00') && str_conta
 $createdToken = notification_link_token($messages[0]);
 notification_verify(!str_contains($messages[0]['body'], $accessToken) && !str_contains($messages[0]['body'], '?access='), 'Long-lived order bearer is absent from email and recovery capability uses a fragment.');
 notification_verify(!str_contains($messages[1]['body'], '#access=') && str_contains($messages[1]['body'], '/orders.html'), 'Shop mail contains only the authenticated admin page link.');
+notification_verify($messages[0]['subject'] === 'MAHARA — Заказ создан MH-FIXTURE-1' && $messages[1]['subject'] === 'MAHARA — Для магазина — Заказ создан MH-FIXTURE-1', 'The shop subject identifies its audience while the customer subject stays unchanged.');
+foreach (["Получатель: Тестовый покупатель\n", "Телефон получателя: +79990000000\n", "Город доставки: Москва\n", "ПВЗ СДЭК (код): FIXTURE1\n", "Адрес ПВЗ / доставки: Тестовая улица, 1\n"] as $detail) {
+    notification_verify(str_contains($messages[1]['body'], $detail) && !str_contains($messages[0]['body'], $detail), 'Only the shop template includes the persisted fulfillment detail: ' . trim($detail));
+}
+notification_verify(str_contains($messages[1]['body'], 'https://shop.example.test/orders.html?order=' . $id . "\n") && !str_contains($messages[1]['body'], $accessToken) && !str_contains($messages[1]['body'], $createdToken) && !str_contains($messages[1]['body'], 'Buyer@example.test'), 'The shop link pins the exact order in the authenticated admin page without exposing customer capabilities or email.');
+$expectedCustomer = "Заказ создан.\nНомер заказа: MH-FIXTURE-1\n\nТестовое худи · M × 2\n\nСтоимость товаров и оплачиваемых на сайте услуг: 33 800,00 ₽.\nДоставка СДЭК оплачивается отдельно перевозчику.\n\nОткрыть заказ (одноразовая ссылка действует 24 часа):\nhttps://shop.example.test/checkout.html#access=" . $createdToken . "\n\nУсловия возврата: https://shop.example.test/returns.html\n\nЭто сообщение о заказе, не рекламная рассылка и не кассовый чек. Не передавайте ссылку на заказ другим людям.\n";
+notification_verify($messages[0]['body'] === $expectedCustomer, 'Adding fulfillment information for the shop leaves the complete customer template unchanged.');
+$unsafeShop = $order;
+$unsafeShop['customer_json'] = json_encode(['name' => "Имя\r\nПодмена" . str_repeat('Я', 200), 'phone' => ['invalid']], JSON_THROW_ON_ERROR);
+$unsafeShop['delivery_json'] = json_encode(['city' => "Москва\x00\t", 'point' => ['invalid'], 'address' => str_repeat('А', 600) . 'TAIL', 'label' => "ПВЗ\u{2028}Название"], JSON_THROW_ON_ERROR);
+$safeShop = mahara_order_mail_message(['audience' => 'shop', 'event' => 'payment_paid', 'link_token' => 'must-never-leak'], $unsafeShop);
+notification_verify(str_contains($safeShop['body'], 'Получатель: Имя  Подмена') && !str_contains($safeShop['body'], "\nПодмена") && !str_contains($safeShop['body'], "\r") && !str_contains($safeShop['body'], "\0") && !str_contains($safeShop['body'], "\u{2028}"), 'Untrusted fulfillment values cannot introduce control characters or extra message lines.');
+notification_verify(str_contains($safeShop['body'], 'Адрес ПВЗ / доставки: ' . str_repeat('А', 500) . "\n") && !str_contains($safeShop['body'], 'TAIL') && !str_contains($safeShop['body'], str_repeat('Я', 151)) && !str_contains($safeShop['body'], 'must-never-leak') && !str_contains($safeShop['body'], 'Array'), 'Shop fields are bounded in Unicode characters; invalid values and job bearer data are not rendered.');
+$legacyShop = $order; $legacyShop['customer_json'] = '{}'; $legacyShop['delivery_json'] = '{}';
+$legacyMessage = mahara_order_mail_message(['audience' => 'shop', 'event' => 'order_created'], $legacyShop);
+notification_verify(!str_contains($legacyMessage['body'], 'FIXTURE1') && !str_contains($legacyMessage['body'], 'Тестовая улица') && !str_contains($legacyMessage['body'], 'СДЭК оплачивается') && str_contains($legacyMessage['body'], '/orders.html?order=' . $id), 'Legacy orders with missing delivery fields keep a working admin link without invented fulfillment data.');
 $storedToken = mahara_query('SELECT * FROM order_recovery_tokens')->fetch();
 notification_verify($storedToken['token_hash'] === hash('sha256', $createdToken) && $storedToken['token_hash'] !== $createdToken, 'Recovery table stores only SHA-256 capability hashes.');
 notification_verify((int)$storedToken['expires_at'] >= time() + 86390 && (int)$storedToken['expires_at'] <= time() + 86400, 'Recovery capability expires in 24 hours.');
@@ -268,6 +284,8 @@ $beforeCopies = count($messages);
 notification_verify(mahara_notifications_work(3) === ['enabled' => true, 'sent' => 3, 'failed' => 0], 'The worker delivers each of the three intended recipients once.');
 $copies = array_slice($messages, $beforeCopies);
 notification_verify(strlen(notification_link_token($copies[0])) === 43 && !str_contains($copies[1]['body'], '#access=') && !str_contains($copies[2]['body'], '#access=') && str_contains($copies[2]['body'], '/orders.html'), 'Only the customer receives a bearer link; both shop recipients receive the authenticated admin link.');
+notification_verify($copies[0]['subject'] === 'MAHARA — Оплата подтверждена MH-FIXTURE-1' && $copies[1]['subject'] === 'MAHARA — Для магазина — Оплата подтверждена MH-FIXTURE-1' && $copies[2]['subject'] === $copies[1]['subject'], 'Paid-event shop copies are distinct from the unchanged buyer payment confirmation.');
+notification_verify($copies[1]['body'] === $copies[2]['body'] && str_contains($copies[1]['body'], "ПВЗ СДЭК (код): FIXTURE1\n") && str_contains($copies[1]['body'], 'Тестовая улица, 1') && str_contains($copies[1]['body'], '/orders.html?order=' . $id), 'Every configured owner receives the actual paid order destination and the same exact admin order link.');
 $GLOBALS['mahara_mail_test_config']['shop_email'] = 'SHOP@EXAMPLE.TEST';
 $GLOBALS['mahara_mail_test_config']['shop_emails'] = ['shop@example.test', 'PERSONAL@EXAMPLE.TEST'];
 mahara_order_notification_schedule($id, 'payment_paid');
@@ -314,6 +332,30 @@ $GLOBALS['notification_dispatcher_fixture'] = ['fail' => 'none', 'calls' => [], 
 \MaharaNotificationDispatcherFixture\mahara_order_notification_schedule($id, 'unknown_event');
 notification_verify($GLOBALS['notification_dispatcher_fixture']['calls'] === [], 'Unsupported events reach neither notification channel.');
 
+// RFC 2047 words decode independently, preserve UTF-8 characters and fold only
+// between complete words. Cover Cyrillic and four-byte characters at boundaries.
+function notification_decode_header(string $header): string {
+    preg_match_all('/=\?UTF-8\?B\?([A-Za-z0-9+\/=]+)\?=/', $header, $matches);
+    return implode('', array_map(static fn(string $part): string => (string)base64_decode($part, true), $matches[1]));
+}
+foreach (['MAHARA — Для магазина — Оплата подтверждена MAH-20261027-01A80CF078', str_repeat('Я', 19) . '🧵' . str_repeat('Ёж🙂 ', 20), str_repeat('Магазин одежды «МАХАРА» ', 12), str_repeat('ASCII ', 40)] as $headerValue) {
+    $encodedHeader = mahara_mail_encode_header($headerValue);
+    notification_verify(notification_decode_header($encodedHeader) === $headerValue, 'Long headers round-trip exactly without losing spaces or Unicode characters.');
+    $encodedWords = explode("\r\n ", $encodedHeader);
+    notification_verify(count($encodedWords) > 1 && preg_match('/^(?:=\?UTF-8\?B\?[A-Za-z0-9+\/=]+\?=)(?:\r\n =\?UTF-8\?B\?[A-Za-z0-9+\/=]+\?=)*$/D', $encodedHeader) === 1, 'Long MIME headers fold with CRLF SPACE only between complete encoded words.');
+    foreach ($encodedWords as $word) {
+        $decodedWord = base64_decode(substr($word, 10, -2), true);
+        notification_verify(strlen($word) <= 68 && is_string($decodedWord) && strlen($decodedWord) <= 42 && preg_match('//u', $decodedWord) === 1, 'Every encoded word stays below RFC 2047 limits and contains complete UTF-8 characters.');
+    }
+    notification_verify(max(array_map('strlen', explode("\r\n", 'Subject: ' . $encodedHeader))) <= 76, 'The Subject prefix and continuation whitespace also fit the RFC header-line limit.');
+}
+notification_verify(mahara_mail_encode_header('') === '', 'An empty header never produces an invalid empty encoded word.');
+foreach (["Injected\r\nBcc: attacker@example.test", "Header\tvalue", "Header\0value", "Header\x7fvalue", "Header\u{0085}value", "Header\u{2028}value", "Header\xc3\x28"] as $invalidHeader) {
+    $rejected = false;
+    try { mahara_mail_encode_header($invalidHeader); } catch (RuntimeException $error) { $rejected = $error->getMessage() === 'Invalid mail header.'; }
+    notification_verify($rejected, 'Malformed UTF-8 and header control characters are rejected without reflecting their content.');
+}
+
 // Exercise the actual SMTP function with namespace-local stream primitives.
 // No socket is opened. A server that accepts DATA then rejects QUIT must still
 // count as success, otherwise the queue would deliver another copy on retry.
@@ -339,11 +381,19 @@ $GLOBALS['notification_smtp_fixture'] = [
     'writes' => [], 'closed' => false,
 ];
 $savedTransport = $GLOBALS['mahara_mail_test_transport']; unset($GLOBALS['mahara_mail_test_transport']);
-try { \MaharaNotificationSmtpFixture\mahara_smtp_send('Buyer@example.test', 'Тестовое письмо', 'Только тестовая отправка.', 'fixture-message'); }
-finally { $GLOBALS['mahara_mail_test_transport'] = $savedTransport; }
+$savedFromName = $GLOBALS['mahara_mail_test_config']['from_name'];
+$smtpSubject = 'MAHARA — Для магазина — Оплата подтверждена MAH-20261027-01A80CF078';
+$smtpFromName = str_repeat('Магазин одежды «МАХАРА» ', 5); $GLOBALS['mahara_mail_test_config']['from_name'] = $smtpFromName;
+try { \MaharaNotificationSmtpFixture\mahara_smtp_send('Buyer@example.test', $smtpSubject, 'Только тестовая отправка.', 'fixture-message'); }
+finally { $GLOBALS['mahara_mail_test_transport'] = $savedTransport; $GLOBALS['mahara_mail_test_config']['from_name'] = $savedFromName; }
 $smtp = $GLOBALS['notification_smtp_fixture'];
 notification_verify($smtp['address'] === 'tls://smtp.example.test:465' && $smtp['context']['ssl']['verify_peer'] === true && $smtp['context']['ssl']['verify_peer_name'] === true && $smtp['context']['ssl']['allow_self_signed'] === false, 'SMTP uses TLS with certificate/hostname validation.');
 notification_verify($smtp['responses'] === [] && end($smtp['writes']) === "QUIT\r\n" && $smtp['closed'] === true, 'Accepted DATA followed by failed QUIT returns success and closes the fake socket.');
 notification_verify(count(array_filter($smtp['writes'], static fn(string $write): bool => str_contains($write, 'Content-Transfer-Encoding: base64'))) === 1, 'Failed QUIT never repeats the SMTP message body.');
 notification_verify(str_contains($smtp['writes'][7], 'Message-ID: <fixture-message@shop.example.test>'), 'SMTP message uses the stable queue identifier and configured origin.');
+foreach (['Subject' => $smtpSubject, 'From' => $smtpFromName] as $headerName => $headerValue) {
+    notification_verify(preg_match('/(?:^|\r\n)' . $headerName . ': ([^\r\n]*(?:\r\n[ \t][^\r\n]*)*)/', $smtp['writes'][7], $headerMatch) === 1 && notification_decode_header($headerMatch[1]) === $headerValue, 'The actual SMTP writer applies lossless MIME folding to ' . $headerName . '.');
+    notification_verify(max(array_map('strlen', explode("\r\n", $headerName . ': ' . $headerMatch[1]))) <= 76, 'The actual ' . $headerName . ' lines including prefixes and the sender address stay within 76 characters.');
+}
+notification_verify(str_contains($smtp['writes'][7], "\r\n <orders@example.test>\r\n") && str_contains($smtp['writes'][7], "\r\n\r\n" . chunk_split(base64_encode('Только тестовая отправка.'), 76, "\r\n") . ".\r\n"), 'Folding preserves the configured sender address and leaves the encoded message body unchanged.');
 echo 'PASS: ' . $checks . " isolated notification checks (disabled gate, deduplication, exact email, private one-use links, retries, leases, no order/stock changes)\n";

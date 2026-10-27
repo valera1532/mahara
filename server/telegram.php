@@ -66,33 +66,59 @@ function mahara_telegram_schedule(string $id, string $event, string $occurrence 
 
 function mahara_telegram_text(mixed $value, int $length): string {
     if (!is_string($value)) return '';
-    $text = preg_replace('/[\x00-\x1f\x7f]/u', ' ', $value);
+    $text = preg_replace('/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u', ' ', $value);
     if ($text === null || !preg_match('/^.{0,' . $length . '}/us', $text, $match)) return '';
     return $match[0];
+}
+
+function mahara_telegram_bounded_text(mixed $value, int $bytes): string {
+    $text = trim(mahara_telegram_text($value, $bytes));
+    if (strlen($text) <= $bytes) return $text;
+    $text = substr($text, 0, $bytes - 3);
+    while (preg_match('//u', $text) !== 1) $text = substr($text, 0, -1);
+    return $text . '…';
 }
 
 function mahara_telegram_message(array $job, array $row): string {
     $labels = ['order_created' => 'Заказ создан', 'payment_paid' => 'Оплата подтверждена', 'refund_completed' => 'Возврат денег подтверждён', 'order_shipped' => 'Заказ передан в доставку', 'order_completed' => 'Заказ завершён', 'order_tracking_updated' => 'Номер отправления обновлён'];
     $statuses = ['payment_pending' => 'ожидает оплаты', 'paid' => 'оплачен', 'refund_pending' => 'возврат в обработке', 'refunded' => 'деньги возвращены', 'partial_refunded' => 'частичный возврат', 'canceled' => 'отменён', 'expired' => 'срок оплаты истёк', 'failed' => 'ошибка оплаты'];
     $fulfillment = ['processing' => 'в обработке', 'shipped' => 'отправлен', 'completed' => 'завершён'];
-    $number = mahara_telegram_text($row['number'], 100);
+    $number = mahara_telegram_bounded_text($row['number'], 100);
     $text = 'MAHARA — ' . ($labels[$job['event']] ?? 'Информация о заказе') . "\nНомер заказа: " . $number;
     $text .= "\nСтатус оплаты: " . ($statuses[$row['status']] ?? 'требует проверки');
     $text .= "\nСтатус отправки: " . ($fulfillment[$row['fulfillment_status']] ?? 'требует проверки') . "\n\nТовары:\n";
     $items = json_decode($row['items_json'], true, 64, JSON_THROW_ON_ERROR);
     if (!is_array($items)) throw new MaharaTelegramDeliveryError();
+    $records = [];
+    foreach (['customer', 'delivery'] as $key) {
+        $json = $row[$key . '_json'] ?? '{}';
+        $record = is_string($json) ? json_decode($json, true, 16) : null;
+        $records[$key] = is_array($record) && !array_is_list($record) ? $record : [];
+    }
+    $customer = $records['customer']; $delivery = $records['delivery'];
+    $details = "\nПолучатель: " . (mahara_telegram_bounded_text($customer['name'] ?? null, 240) ?: 'не указан');
+    $details .= "\nТелефон получателя: " . (mahara_telegram_bounded_text($customer['phone'] ?? null, 40) ?: 'не указан');
+    $details .= "\nГород доставки: " . (mahara_telegram_bounded_text($delivery['city'] ?? null, 240) ?: 'не указан');
+    $point = mahara_telegram_bounded_text($delivery['point'] ?? null, 100);
+    if ($point !== '') $details .= (is_string($delivery['quoteId'] ?? null) && $delivery['quoteId'] !== '' ? "\nПВЗ СДЭК (код): " : "\nПункт выдачи: ") . $point;
+    $address = mahara_telegram_bounded_text($delivery['address'] ?? null, 600);
+    $details .= "\nАдрес ПВЗ / доставки: " . ($address !== '' ? $address : 'не указан');
+    $label = mahara_telegram_bounded_text($delivery['label'] ?? null, 200);
+    if ($label !== '' && $label !== $address) $details .= "\nДоставка: " . $label;
+    $footer = "\n\nСумма заказа: " . number_format((int)$row['total_amount'] / 100, 2, ',', ' ') . " ₽.\n";
+    if (in_array($job['event'], ['order_shipped', 'order_completed', 'order_tracking_updated'], true) && $row['tracking_number'] !== '') $footer .= 'Номер отправления: ' . mahara_telegram_text($row['tracking_number'], 120) . "\n";
+    // This is an authenticated admin search, never a customer bearer link.
+    $footer .= "\nПанель магазина: " . mahara_config()['origin'] . '/orders.html?q=' . rawurlencode($number);
+    $omitted = 'Ещё позиций: ' . count($items) . ". Полный состав — в панели магазина.\n";
     $shown = 0;
     foreach ($items as $item) {
         $line = mahara_telegram_text($item['title'] ?? '', 120) . ' · ' . mahara_telegram_text($item['size'] ?? '', 20) . ' × ' . max(0, (int)($item['qty'] ?? 0)) . "\n";
         // A byte budget is stricter than Telegram's 4096-character limit.
-        if (strlen($text . $line) > 2400) break;
+        if (strlen($text . $line . $omitted . $details . $footer) > 4000) break;
         $text .= $line; $shown++;
     }
     if ($shown < count($items)) $text .= 'Ещё позиций: ' . (count($items) - $shown) . ". Полный состав — в панели магазина.\n";
-    $text .= "\nСумма заказа: " . number_format((int)$row['total_amount'] / 100, 2, ',', ' ') . " ₽.\n";
-    if (in_array($job['event'], ['order_shipped', 'order_completed', 'order_tracking_updated'], true) && $row['tracking_number'] !== '') $text .= 'Номер отправления: ' . mahara_telegram_text($row['tracking_number'], 120) . "\n";
-    // This is an authenticated admin search, never a customer bearer link.
-    return $text . "\nПанель магазина: " . mahara_config()['origin'] . '/orders.html?q=' . rawurlencode($number);
+    return $text . $details . $footer;
 }
 
 function mahara_telegram_send(string $chatId, string $text): array {
@@ -147,7 +173,7 @@ function mahara_telegram_work(int $limit = 3): array {
             $db->exec('COMMIT');
         } catch (Throwable $error) { try { $db->exec('ROLLBACK'); } catch (Throwable) {} throw $error; }
         try {
-            $row = mahara_query('SELECT number,items_json,total_amount,status,fulfillment_status,tracking_number FROM checkout_orders WHERE id=?', [$job['order_id']])->fetch();
+            $row = mahara_query('SELECT number,items_json,customer_json,delivery_json,total_amount,status,fulfillment_status,tracking_number FROM checkout_orders WHERE id=?', [$job['order_id']])->fetch();
             if (!$row) throw new MaharaTelegramDeliveryError();
             mahara_telegram_send($job['chat_id'], mahara_telegram_message($job, $row));
             $sent += mahara_query("UPDATE order_telegram_queue SET status='sent',sent_at=?,lease=NULL WHERE id=? AND lease=? AND status='sending'", [time(), $job['id'], $lease])->rowCount();

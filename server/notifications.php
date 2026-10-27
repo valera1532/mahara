@@ -140,9 +140,45 @@ function mahara_notifications_api(string $path, string $method): void {
     if (str_starts_with($path, '/api/checkout/recovery/')) throw new MaharaHttpError(405, 'Метод не поддерживается.');
 }
 
+function mahara_order_mail_text(mixed $value, int $length): string {
+    if (!is_string($value)) return '';
+    $text = preg_replace('/[\x00-\x1f\x7f\x{2028}\x{2029}]/u', ' ', $value);
+    if ($text === null || !preg_match('/^.{0,' . $length . '}/us', $text, $match)) return '';
+    return trim($match[0]);
+}
+
+function mahara_order_shop_mail_message(array $job, array $row, string $label): array {
+    $number = mahara_order_mail_text($row['number'], 100);
+    $customer = json_decode($row['customer_json'], true, 64, JSON_THROW_ON_ERROR);
+    $delivery = json_decode($row['delivery_json'], true, 64, JSON_THROW_ON_ERROR);
+    $body = 'Для магазина — ' . $label . ".\nНомер заказа: " . $number . "\n\n";
+    foreach (array_slice(json_decode($row['items_json'], true, 64, JSON_THROW_ON_ERROR), 0, 30) as $item) {
+        $body .= mahara_order_mail_text($item['title'] ?? '', 200) . ' · ' . mahara_order_mail_text($item['size'] ?? '', 30) . ' × ' . max(0, min(9999, (int)($item['qty'] ?? 0))) . "\n";
+    }
+    $body .= "\nСтоимость товаров и оплачиваемых на сайте услуг: " . number_format((int)$row['total_amount'] / 100, 2, ',', ' ') . " ₽.\n";
+    $body .= "\nПолучатель: " . mahara_order_mail_text($customer['name'] ?? '', 150);
+    $body .= "\nТелефон получателя: " . mahara_order_mail_text($customer['phone'] ?? '', 24);
+    $body .= "\nГород доставки: " . mahara_order_mail_text($delivery['city'] ?? '', 150);
+    $point = mahara_order_mail_text($delivery['point'] ?? '', 250);
+    if ($point !== '') $body .= (!empty($delivery['quoteId']) ? "\nПВЗ СДЭК (код): " : "\nПункт выдачи: ") . $point;
+    $address = mahara_order_mail_text($delivery['address'] ?? '', 500);
+    if ($address !== '') $body .= "\nАдрес ПВЗ / доставки: " . $address;
+    $deliveryLabel = mahara_order_mail_text($delivery['label'] ?? '', 250);
+    if ($deliveryLabel !== '' && $deliveryLabel !== $address) $body .= "\nДоставка: " . $deliveryLabel;
+    $body .= "\n";
+    if (!empty($delivery['quoteId'])) $body .= "Доставка СДЭК оплачивается отдельно перевозчику.\n";
+    if ($row['tracking_number'] !== '' && in_array($job['event'], ['order_shipped', 'order_completed', 'order_tracking_updated'], true)) {
+        $body .= 'Номер отправления: ' . mahara_order_mail_text($row['tracking_number'], 120) . "\nОтследить в СДЭК (введите номер отправления): https://www.cdek.ru/ru/tracking/\n";
+    }
+    $body .= "\nЗаказ в панели магазина (требуется вход): " . mahara_config()['origin'] . '/orders.html?order=' . rawurlencode(mahara_order_mail_text($row['id'], 100)) . "\n";
+    $body .= "\nЭто служебное уведомление для магазина, не кассовый чек.\n";
+    return ['subject' => 'MAHARA — Для магазина — ' . $label . ' ' . $number, 'body' => $body];
+}
+
 function mahara_order_mail_message(array $job, array $row): array {
     $labels = ['order_created' => 'Заказ создан', 'payment_paid' => 'Оплата подтверждена', 'refund_completed' => 'Возврат денег подтверждён', 'order_shipped' => 'Заказ передан в доставку', 'order_completed' => 'Заказ завершён', 'order_tracking_updated' => 'Номер отправления обновлён', 'access_recovery' => 'Доступ к вашему заказу'];
     $label = $labels[$job['event']] ?? 'Информация о заказе';
+    if ($job['audience'] === 'shop') return mahara_order_shop_mail_message($job, $row, $label);
     $body = $label . ".\nНомер заказа: " . $row['number'] . "\n\n";
     foreach (json_decode($row['items_json'], true, 64, JSON_THROW_ON_ERROR) as $item) $body .= $item['title'] . ' · ' . $item['size'] . ' × ' . $item['qty'] . "\n";
     $body .= "\nСтоимость товаров и оплачиваемых на сайте услуг: " . number_format((int)$row['total_amount'] / 100, 2, ',', ' ') . " ₽.\n";
@@ -158,11 +194,28 @@ function mahara_order_mail_message(array $job, array $row): array {
     return ['subject' => 'MAHARA — ' . $label . ' ' . $row['number'], 'body' => $body];
 }
 
+function mahara_mail_encode_header(string $value): string {
+    if (preg_match('//u', $value) !== 1 || preg_match('/[\p{Cc}\x{2028}\x{2029}]/u', $value)) throw new RuntimeException('Invalid mail header.');
+    $words = []; $chunk = ''; $limit = 39;
+    // RFC 2047: at most 75 characters per encoded-word and 76 per line.
+    // The first word also leaves room for "Subject: "; later lines start with a space.
+    foreach (preg_split('//u', $value, -1, PREG_SPLIT_NO_EMPTY) as $character) {
+        if (strlen($chunk) + strlen($character) > $limit) {
+            $words[] = '=?UTF-8?B?' . base64_encode($chunk) . '?='; $chunk = ''; $limit = 42;
+        }
+        $chunk .= $character;
+    }
+    if ($chunk !== '') $words[] = '=?UTF-8?B?' . base64_encode($chunk) . '?=';
+    return implode("\r\n ", $words);
+}
+
 function mahara_smtp_send(string $recipient, string $subject, string $body, string $messageId): void {
     if (defined('MAHARA_LIBRARY_ONLY') && isset($GLOBALS['mahara_mail_test_transport'])) {
         ($GLOBALS['mahara_mail_test_transport'])($recipient, $subject, $body, $messageId); return;
     }
+    $encodedSubject = mahara_mail_encode_header($subject);
     $config = mahara_mail_config(); $secrets = mahara_mail_secrets();
+    $encodedFrom = mahara_mail_encode_header((string)$config['from_name']);
     if (!filter_var($recipient, FILTER_VALIDATE_EMAIL)) throw new RuntimeException('Invalid mail recipient.');
     $context = stream_context_create(['ssl' => ['verify_peer' => true, 'verify_peer_name' => true, 'allow_self_signed' => false, 'peer_name' => $config['host'], 'SNI_enabled' => true]]);
     $socket = @stream_socket_client(($config['encryption'] === 'tls' ? 'tls://' : 'tcp://') . $config['host'] . ':' . $config['port'], $errorCode, $errorText, 10, STREAM_CLIENT_CONNECT, $context);
@@ -193,8 +246,7 @@ function mahara_smtp_send(string $recipient, string $subject, string $body, stri
         }
         $command('AUTH LOGIN', [334]); $command(base64_encode($secrets['username']), [334]); $command(base64_encode($secrets['password']), [235]);
         $command('MAIL FROM:<' . $config['from'] . '>', [250]); $command('RCPT TO:<' . $recipient . '>', [250, 251]); $command('DATA', [354]);
-        $encoded = static fn(string $value): string => '=?UTF-8?B?' . base64_encode($value) . '?=';
-        $headers = ['Date: ' . gmdate('D, d M Y H:i:s') . ' +0000', 'From: ' . $encoded((string)$config['from_name']) . ' <' . $config['from'] . '>', 'To: <' . $recipient . '>', 'Subject: ' . $encoded($subject), 'Message-ID: <' . $messageId . '@' . parse_url(mahara_config()['origin'], PHP_URL_HOST) . '>', 'MIME-Version: 1.0', 'Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: base64'];
+        $headers = ['Date: ' . gmdate('D, d M Y H:i:s') . ' +0000', 'From: ' . ($encodedFrom !== '' ? $encodedFrom . "\r\n " : '') . '<' . $config['from'] . '>', 'To: <' . $recipient . '>', 'Subject: ' . $encodedSubject, 'Message-ID: <' . $messageId . '@' . parse_url(mahara_config()['origin'], PHP_URL_HOST) . '>', 'MIME-Version: 1.0', 'Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: base64'];
         $write(implode("\r\n", $headers) . "\r\n\r\n" . chunk_split(base64_encode($body), 76, "\r\n") . ".\r\n"); $read([250]);
         // Delivery has succeeded. A failed QUIT must never enqueue another copy.
         @fwrite($socket, "QUIT\r\n");
