@@ -19,8 +19,8 @@ if (!in_array($mode, ['--worker', '--cli'], true)) {
             if ($status !== 0) { echo $output; break; }
             if ($childMode === '--cli') {
                 $summary = json_decode($output, true, 16, JSON_THROW_ON_ERROR);
-                if ($summary !== ['enabled' => true, 'sent' => 0, 'failed' => 0]) throw new RuntimeException('CLI must emit only aggregate counts for the empty queue.');
-                echo "PASS: isolated mail CLI emits aggregate counts only\n";
+                if ($summary !== ['mail' => ['enabled' => true, 'sent' => 0, 'failed' => 0], 'telegram' => ['enabled' => false, 'sent' => 0, 'failed' => 0]]) throw new RuntimeException('CLI must emit only per-channel aggregate counts for the empty queue.');
+                echo "PASS: isolated notification CLI emits per-channel aggregate counts only\n";
             } else echo $output;
         }
     } finally {
@@ -45,6 +45,9 @@ $GLOBALS['mahara_app_test_config'] = [
 ];
 $GLOBALS['mahara_mail_test_config'] = ['enabled' => true, 'host' => 'smtp.example.test', 'port' => 465, 'encryption' => 'tls', 'from' => 'orders@example.test', 'from_name' => 'MAHARA Fixture', 'shop_email' => 'shop@example.test'];
 $GLOBALS['mahara_mail_test_secrets'] = ['username' => 'fixture-mail-user', 'password' => 'fixture-mail-password'];
+$GLOBALS['mahara_telegram_test_config'] = ['enabled' => false];
+$GLOBALS['mahara_telegram_test_secrets'] = ['token' => ''];
+$GLOBALS['mahara_telegram_test_transport'] = static function (): never { throw new RuntimeException('A notification test must never contact Telegram.'); };
 $GLOBALS['mahara_payments_test_secrets'] = ['terminal_key' => 'fixture-bank-key', 'password' => 'fixture-bank-password'];
 $GLOBALS['mahara_payments_test_transport'] = static function (): never { throw new RuntimeException('A notification test must never contact a bank.'); };
 $GLOBALS['mahara_shipping_test_secrets'] = ['account' => 'fixture-account', 'password' => 'fixture-password'];
@@ -112,7 +115,7 @@ notification_verify(notification_queue('order_created') === [], 'Disabled mail d
 notification_error(503, static fn() => mahara_order_recovery_request(['number' => 'MH-FIXTURE-1', 'email' => 'Buyer@example.test']), 'Recovery requests are disabled without mail.');
 notification_verify(mahara_notifications_work() === ['enabled' => false, 'sent' => 0, 'failed' => 0] && $messages === [], 'Disabled worker cannot send.');
 $GLOBALS['mahara_mail_test_config']['enabled'] = true;
-foreach (['host' => "smtp.example.test\r\nInjected", 'port' => 25, 'encryption' => 'none', 'from' => 'invalid-address', 'shop_email' => 'invalid-address'] as $field => $invalid) {
+foreach (['host' => "smtp.example.test\r\nInjected", 'port' => 25, 'encryption' => 'none', 'from' => 'invalid-address'] as $field => $invalid) {
     $original = $GLOBALS['mahara_mail_test_config'][$field]; $GLOBALS['mahara_mail_test_config'][$field] = $invalid;
     notification_verify(!mahara_mail_ready(), 'Invalid ' . $field . ' disables mail before transport.');
     $GLOBALS['mahara_mail_test_config'][$field] = $original;
@@ -247,6 +250,69 @@ notification_verify(count($messages) === $beforeFirst + 1 && str_contains($messa
 mahara_payments_fulfillment($firstShipment['id'], ['status' => 'processing', 'trackingNumber' => 'FIRST-TRACK']);
 mahara_payments_fulfillment($firstShipment['id'], ['status' => 'shipped', 'trackingNumber' => 'FIRST-TRACK']);
 notification_verify(mahara_notifications_work(3)['sent'] === 0 && count(notification_queue('order_tracking_updated')) === $beforeCorrections, 'Returning to shipped with the same tracking number does not send a duplicate.');
+
+// Multiple shop recipients preserve legacy queue keys and never change order state.
+$beforeRecipients = notification_state();
+$legacyShopKey = $id . ':order_created:shop';
+notification_verify((int)mahara_query('SELECT COUNT(*) FROM order_mail_queue WHERE dedup_key=?', [$legacyShopKey])->fetchColumn() === 1, 'Previously delivered legacy shop mail retains its original deduplication key.');
+$beforeConfigured = (int)mahara_query('SELECT COUNT(*) FROM order_mail_queue')->fetchColumn();
+$GLOBALS['mahara_mail_test_config']['shop_email'] = 'shop@example.test';
+$GLOBALS['mahara_mail_test_config']['shop_emails'] = ['personal@example.test', 'PERSONAL@EXAMPLE.TEST', ' SHOP@example.test ', 'invalid-address', null, ['nested'], "other@example.test\r\nBcc:attacker@example.test"];
+notification_verify(mahara_mail_ready() && count(mahara_mail_shop_recipients()) === 2, 'Valid shop addresses deduplicate case-insensitively; malformed entries do not disable customer mail.');
+notification_verify((int)mahara_query('SELECT COUNT(*) FROM order_mail_queue')->fetchColumn() === $beforeConfigured, 'Changing recipients does not enqueue historical orders.');
+mahara_order_notification_schedule($id, 'payment_paid'); mahara_order_notification_schedule($id, 'payment_paid');
+$paidJobs = notification_queue('payment_paid');
+notification_verify(count($paidJobs) === 3 && array_column($paidJobs, 'recipient') === ['Buyer@example.test', 'shop@example.test', 'personal@example.test'], 'A new event queues exactly one customer and two distinct shop copies.');
+notification_verify(array_column($paidJobs, 'dedup_key') === [$id . ':payment_paid:customer', $id . ':payment_paid:shop', $id . ':payment_paid:shop:' . hash('sha256', 'personal@example.test')], 'Legacy shop keys remain compatible and additional recipient keys hash the canonical address.');
+$beforeCopies = count($messages);
+notification_verify(mahara_notifications_work(3) === ['enabled' => true, 'sent' => 3, 'failed' => 0], 'The worker delivers each of the three intended recipients once.');
+$copies = array_slice($messages, $beforeCopies);
+notification_verify(strlen(notification_link_token($copies[0])) === 43 && !str_contains($copies[1]['body'], '#access=') && !str_contains($copies[2]['body'], '#access=') && str_contains($copies[2]['body'], '/orders.html'), 'Only the customer receives a bearer link; both shop recipients receive the authenticated admin link.');
+$GLOBALS['mahara_mail_test_config']['shop_email'] = 'SHOP@EXAMPLE.TEST';
+$GLOBALS['mahara_mail_test_config']['shop_emails'] = ['shop@example.test', 'PERSONAL@EXAMPLE.TEST'];
+mahara_order_notification_schedule($id, 'payment_paid');
+notification_verify(count(notification_queue('payment_paid')) === 3 && mahara_notifications_work(3)['sent'] === 0, 'Case changes and recipient-list order do not resend a delivered event.');
+
+$GLOBALS['mahara_mail_test_config']['shop_email'] = 'invalid-address';
+foreach ([null, 'not-an-array', ['unexpected-key' => 'personal@example.test'], [null, [], 'bad-address']] as $invalidRecipients) {
+    $GLOBALS['mahara_mail_test_config']['shop_emails'] = $invalidRecipients;
+    notification_verify(mahara_mail_ready() && mahara_mail_shop_recipients() === [], 'Invalid optional shop configuration leaves customer SMTP ready and yields no arbitrary recipients.');
+}
+mahara_order_notification_schedule($firstShipment['id'], 'payment_paid');
+$customerOnlyJobs = array_values(array_filter(notification_queue('payment_paid'), static fn(array $job): bool => $job['order_id'] === $firstShipment['id']));
+notification_verify(count($customerOnlyJobs) === 1 && $customerOnlyJobs[0]['audience'] === 'customer' && mahara_notifications_work(3)['sent'] === 1, 'Customer mail still queues and delivers when every configured shop recipient is invalid.');
+$GLOBALS['mahara_mail_test_config']['shop_email'] = 'legacy@example.test';
+$GLOBALS['mahara_mail_test_config']['shop_emails'] = array_map(static fn(int $n): string => 'shop-' . $n . '@example.test', range(1, 11));
+notification_verify(count(mahara_mail_shop_recipients()) === 10 && mahara_mail_shop_recipients()['shop'] === 'legacy@example.test', 'Shop copies are bounded to ten distinct addresses, including the legacy address.');
+$GLOBALS['mahara_mail_test_config']['shop_email'] = ''; $GLOBALS['mahara_mail_test_config']['shop_emails'] = [];
+notification_verify(notification_state() === $beforeRecipients, 'Recipient expansion and delivery leave orders, payment/refund state, reservations and inventory unchanged.');
+
+// Exercise the real dispatcher with isolated channel functions: either failed
+// scheduler must leave the other callable, with no exception details in logs.
+$dispatcher = new ReflectionFunction('mahara_order_notification_schedule');
+$dispatcherLines = file((string)$dispatcher->getFileName());
+$dispatcherSource = implode('', array_slice($dispatcherLines, $dispatcher->getStartLine() - 1, $dispatcher->getEndLine() - $dispatcher->getStartLine() + 1));
+eval('namespace MaharaNotificationDispatcherFixture; use \\Throwable; use \\RuntimeException;' . $dispatcherSource . <<<'DISPATCHER_FIXTURE'
+function mahara_order_mail_schedule($id, $event, $occurrence) {
+    $GLOBALS['notification_dispatcher_fixture']['calls'][] = ['mail', $id, $event, $occurrence];
+    if ($GLOBALS['notification_dispatcher_fixture']['fail'] === 'mail') throw new RuntimeException('sensitive-mail-error');
+}
+function mahara_telegram_schedule($id, $event, $occurrence) {
+    $GLOBALS['notification_dispatcher_fixture']['calls'][] = ['telegram', $id, $event, $occurrence];
+    if ($GLOBALS['notification_dispatcher_fixture']['fail'] === 'telegram') throw new RuntimeException('sensitive-telegram-error');
+}
+function error_log($message) { $GLOBALS['notification_dispatcher_fixture']['logs'][] = $message; return true; }
+DISPATCHER_FIXTURE);
+foreach (['mail', 'telegram', 'none'] as $failedChannel) {
+    $GLOBALS['notification_dispatcher_fixture'] = ['fail' => $failedChannel, 'calls' => [], 'logs' => []];
+    \MaharaNotificationDispatcherFixture\mahara_order_notification_schedule('fixture-private-id', 'order_tracking_updated', 'fixture-occurrence');
+    $dispatch = $GLOBALS['notification_dispatcher_fixture'];
+    notification_verify($dispatch['calls'] === [['mail', 'fixture-private-id', 'order_tracking_updated', 'fixture-occurrence'], ['telegram', 'fixture-private-id', 'order_tracking_updated', 'fixture-occurrence']], 'Both channels are attempted independently and receive the same event occurrence.');
+    notification_verify(count($dispatch['logs']) === ($failedChannel === 'none' ? 0 : 1) && !str_contains(implode('', $dispatch['logs']), 'sensitive-') && !str_contains(implode('', $dispatch['logs']), 'fixture-private-id'), 'Channel errors log only a fixed message without exception details or order identifiers.');
+}
+$GLOBALS['notification_dispatcher_fixture'] = ['fail' => 'none', 'calls' => [], 'logs' => []];
+\MaharaNotificationDispatcherFixture\mahara_order_notification_schedule($id, 'unknown_event');
+notification_verify($GLOBALS['notification_dispatcher_fixture']['calls'] === [], 'Unsupported events reach neither notification channel.');
 
 // Exercise the actual SMTP function with namespace-local stream primitives.
 // No socket is opened. A server that accepts DATA then rejects QUIT must still

@@ -68,5 +68,12 @@ return [
         'enabled' => false,
         'host' => '', 'port' => 465, 'encryption' => 'tls', // or 587/starttls; TLS always verified.
         'from' => '', 'from_name' => 'MAHARA', 'shop_email' => '',
+        // Additional shop copies; at most 10 unique shop addresses in total.
+        // Keep shop_email when extending an existing setup to preserve its deduplication key.
+        'shop_emails' => [],
     ],
+    // Owner alerts only. Store the token outside the web root in
+    // data_dir/telegram-secrets.php -> ['token'=>'...'], readable only by the owner.
+    // The recipient must first start the bot; use the verified numeric chat ID.
+    'telegram' => ['enabled' => false, 'chat_id' => ''],
 ];

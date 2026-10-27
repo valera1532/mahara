@@ -1,10 +1,12 @@
 <?php
 declare(strict_types=1);
 
-// Transactional mail only. Nothing is sent by a web request or unless explicitly
+require_once __DIR__ . '/telegram.php';
+
+// Transactional notifications only. Nothing is sent by a web request or unless explicitly
 // enabled in private configuration. A CLI/cron worker delivers the private queue.
 function mahara_mail_config(): array {
-    $config = array_merge(['enabled' => false, 'host' => '', 'port' => 465, 'encryption' => 'tls', 'from' => '', 'from_name' => 'MAHARA', 'shop_email' => ''], mahara_config()['mail'] ?? []);
+    $config = array_merge(['enabled' => false, 'host' => '', 'port' => 465, 'encryption' => 'tls', 'from' => '', 'from_name' => 'MAHARA', 'shop_email' => '', 'shop_emails' => []], mahara_config()['mail'] ?? []);
     if (defined('MAHARA_LIBRARY_ONLY') && isset($GLOBALS['mahara_mail_test_config'])) $config = array_merge($config, $GLOBALS['mahara_mail_test_config']);
     return $config;
 }
@@ -25,7 +27,6 @@ function mahara_mail_secrets(): array {
 function mahara_mail_ready(): bool {
     $config = mahara_mail_config();
     if ($config['enabled'] !== true || !is_string($config['host']) || !preg_match('/^(?=.{1,253}$)[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?$/D', $config['host']) || !is_int($config['port']) || !in_array($config['port'], [465, 587], true) || !in_array($config['encryption'], ['tls', 'starttls'], true) || !filter_var($config['from'], FILTER_VALIDATE_EMAIL)) return false;
-    if ($config['shop_email'] !== '' && !filter_var($config['shop_email'], FILTER_VALIDATE_EMAIL)) return false;
     $origin = mahara_config()['origin'];
     if (!$origin || (mahara_config()['production'] && !str_starts_with($origin, 'https://'))) return false;
     $secrets = mahara_mail_secrets();
@@ -50,17 +51,44 @@ function mahara_notifications_schema(): void {
     $ready = true;
 }
 
-function mahara_order_notification_schedule(string $id, string $event, string $occurrence = ''): void {
-    if (!in_array($event, ['order_created', 'payment_paid', 'refund_completed', 'order_shipped', 'order_completed', 'order_tracking_updated'], true) || !mahara_mail_ready()) return;
+function mahara_mail_shop_recipients(): array {
+    $config = mahara_mail_config(); $recipients = []; $seen = [];
+    $addresses = [['email' => $config['shop_email'], 'legacy' => true]];
+    if (is_array($config['shop_emails']) && array_is_list($config['shop_emails'])) {
+        foreach ($config['shop_emails'] as $email) $addresses[] = ['email' => $email, 'legacy' => false];
+    }
+    foreach ($addresses as $address) {
+        if (!is_string($address['email'])) continue;
+        $email = trim($address['email']); $canonical = strtolower($email);
+        if (strlen($email) > 254 || !filter_var($email, FILTER_VALIDATE_EMAIL) || isset($seen[$canonical])) continue;
+        // Keep the original shop key when adding recipients to an existing deployment.
+        $key = $address['legacy'] ? 'shop' : 'shop:' . hash('sha256', $canonical);
+        $recipients[$key] = $email; $seen[$canonical] = true;
+        if (count($recipients) >= 10) break;
+    }
+    return $recipients;
+}
+
+function mahara_order_mail_schedule(string $id, string $event, string $occurrence = ''): void {
+    if (!mahara_mail_ready()) return;
     mahara_notifications_schema();
     $row = mahara_payments_row($id);
     $customer = json_decode($row['customer_json'], true, 64, JSON_THROW_ON_ERROR);
-    $recipients = ['customer' => $customer['email'] ?? '', 'shop' => mahara_mail_config()['shop_email']];
-    foreach ($recipients as $audience => $email) {
+    $recipients = ['customer' => $customer['email'] ?? ''] + mahara_mail_shop_recipients();
+    foreach ($recipients as $recipientKey => $email) {
         if (!is_string($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) continue;
-        $key = $id . ':' . $event . ($occurrence !== '' ? ':' . $occurrence : '') . ':' . $audience;
+        $audience = $recipientKey === 'customer' ? 'customer' : 'shop';
+        $key = $id . ':' . $event . ($occurrence !== '' ? ':' . $occurrence : '') . ':' . $recipientKey;
         mahara_query('INSERT OR IGNORE INTO order_mail_queue(dedup_key,order_id,event,recipient,audience,available_at,created_at) VALUES(?,?,?,?,?,?,?)', [$key, $id, $event, $email, $audience, time(), time()]);
     }
+}
+
+function mahara_order_notification_schedule(string $id, string $event, string $occurrence = ''): void {
+    if (!in_array($event, ['order_created', 'payment_paid', 'refund_completed', 'order_shipped', 'order_completed', 'order_tracking_updated'], true)) return;
+    try { mahara_order_mail_schedule($id, $event, $occurrence); }
+    catch (Throwable) { error_log('MAHARA email notification scheduling failed.'); }
+    try { mahara_telegram_schedule($id, $event, $occurrence); }
+    catch (Throwable) { error_log('MAHARA Telegram notification scheduling failed.'); }
 }
 
 function mahara_order_recovery_request(mixed $input): void {
