@@ -10,7 +10,7 @@ final class MaharaTelegramDeliveryError extends RuntimeException {
 }
 
 function mahara_telegram_config(): array {
-    $defaults = ['enabled' => false, 'chat_id' => ''];
+    $defaults = ['enabled' => false, 'chat_id' => '', 'allowed_usernames' => [], 'bot_username' => 'MaharaRussia_bot'];
     if (defined('MAHARA_LIBRARY_ONLY') && isset($GLOBALS['mahara_telegram_test_config'])) return array_merge($defaults, $GLOBALS['mahara_telegram_test_config']);
     return array_merge($defaults, mahara_config()['telegram'] ?? []);
 }
@@ -31,9 +31,19 @@ function mahara_telegram_chat_valid(mixed $chatId): bool {
     return is_string($chatId) && preg_match('/^-?[1-9][0-9]{0,19}$/D', $chatId) === 1;
 }
 
+function mahara_telegram_allowed_usernames(): array {
+    $values = mahara_telegram_config()['allowed_usernames']; $names = [];
+    if (!is_array($values) || !array_is_list($values)) return [];
+    foreach (array_slice($values, 0, 20) as $value) {
+        if (is_string($value) && preg_match('/^[a-zA-Z0-9_]{5,32}$/D', $value)) $names[] = strtolower($value);
+    }
+    return array_values(array_unique($names));
+}
+
 function mahara_telegram_ready(): bool {
     $config = mahara_telegram_config();
-    if ($config['enabled'] !== true || !mahara_telegram_chat_valid($config['chat_id'])) return false;
+    $canSubscribe = mahara_telegram_allowed_usernames() !== [] && is_string($config['bot_username']) && preg_match('/^[a-zA-Z0-9_]{5,32}$/D', $config['bot_username']);
+    if ($config['enabled'] !== true || (!mahara_telegram_chat_valid($config['chat_id']) && !$canSubscribe)) return false;
     if (!str_starts_with(mahara_config()['origin'], 'https://')) return false;
     // A complete fixture transport never opens private credential files.
     if (defined('MAHARA_LIBRARY_ONLY') && is_callable($GLOBALS['mahara_telegram_test_transport'] ?? null)) return true;
@@ -52,16 +62,72 @@ function mahara_telegram_schema(): void {
         chat_id TEXT NOT NULL, status TEXT NOT NULL DEFAULT \'pending\',
         attempts INTEGER NOT NULL DEFAULT 0, available_at INTEGER NOT NULL,
         created_at INTEGER NOT NULL, sent_at INTEGER, lease TEXT
-    ); CREATE INDEX IF NOT EXISTS order_telegram_pending ON order_telegram_queue(status,available_at);');
+    ); CREATE INDEX IF NOT EXISTS order_telegram_pending ON order_telegram_queue(status,available_at);
+    CREATE TABLE IF NOT EXISTS order_telegram_subscribers (
+        chat_id TEXT PRIMARY KEY, username TEXT NOT NULL DEFAULT \'\', active INTEGER NOT NULL CHECK(active IN (0,1)), updated_at INTEGER NOT NULL
+    ); CREATE TABLE IF NOT EXISTS order_telegram_state (name TEXT PRIMARY KEY,value TEXT NOT NULL);');
     $ready = true;
+}
+
+function mahara_telegram_subscribers(): array {
+    mahara_telegram_schema(); $config = mahara_telegram_config();
+    if (mahara_telegram_chat_valid($config['chat_id'])) {
+        $db = mahara_db(); $db->exec('BEGIN IMMEDIATE');
+        try {
+            $seed = mahara_query("INSERT OR IGNORE INTO order_telegram_state(name,value) VALUES('legacy_seeded',?)", [$config['chat_id']]);
+            if ($seed->rowCount() === 1) mahara_query("INSERT OR IGNORE INTO order_telegram_subscribers(chat_id,username,active,updated_at) VALUES(?,'',1,?)", [$config['chat_id'], time()]);
+            $db->exec('COMMIT');
+        } catch (Throwable $error) { try { $db->exec('ROLLBACK'); } catch (Throwable) {} throw $error; }
+    }
+    $allowed = mahara_telegram_allowed_usernames(); $ids = [];
+    foreach (mahara_query('SELECT chat_id,username FROM order_telegram_subscribers WHERE active=1 ORDER BY chat_id')->fetchAll() as $subscriber) {
+        if (mahara_telegram_chat_valid($subscriber['chat_id']) && (in_array($subscriber['username'], $allowed, true) || ($subscriber['username'] === '' && $subscriber['chat_id'] === $config['chat_id']))) $ids[] = $subscriber['chat_id'];
+    }
+    return $ids;
+}
+
+function mahara_telegram_poll(): void {
+    $allowed = mahara_telegram_allowed_usernames(); $bot = mahara_telegram_config()['bot_username'];
+    if ($allowed === [] || !is_string($bot) || !preg_match('/^[a-zA-Z0-9_]{5,32}$/D', $bot)) return;
+    mahara_telegram_schema();
+    $storedCursor = mahara_query("SELECT value FROM order_telegram_state WHERE name='update_cursor'")->fetchColumn();
+    $cursor = $storedCursor === false ? -1 : (int)$storedCursor;
+    $updates = mahara_telegram_request('getUpdates', ['offset' => $cursor + 1, 'limit' => 100, 'timeout' => 0, 'allowed_updates' => ['message']]);
+    if (!array_is_list($updates) || count($updates) > 100) throw new MaharaTelegramDeliveryError();
+    foreach ($updates as $update) if (!is_array($update) || !is_int($update['update_id'] ?? null) || $update['update_id'] < 0) throw new MaharaTelegramDeliveryError();
+    usort($updates, static fn(array $a, array $b): int => $a['update_id'] <=> $b['update_id']);
+    $db = mahara_db(); $db->exec('BEGIN IMMEDIATE');
+    try {
+        $storedCursor = mahara_query("SELECT value FROM order_telegram_state WHERE name='update_cursor'")->fetchColumn();
+        $cursor = $storedCursor === false ? -1 : (int)$storedCursor;
+        foreach ($updates as $update) {
+            if ($update['update_id'] <= $cursor) continue;
+            $cursor = $update['update_id']; $message = $update['message'] ?? null;
+            if (!is_array($message) || ($message['chat']['type'] ?? null) !== 'private' || ($message['from']['is_bot'] ?? null) !== false
+                || !is_int($message['chat']['id'] ?? null) || $message['chat']['id'] <= 0 || ($message['from']['id'] ?? null) !== $message['chat']['id']
+                || !is_string($message['from']['username'] ?? null) || !in_array(strtolower($message['from']['username']), $allowed, true) || !is_string($message['text'] ?? null)) continue;
+            if (!preg_match('/^\/(start|stop)(?:@([a-zA-Z0-9_]{5,32}))?(?:\s[^\r\n]*)?$/D', trim($message['text']), $match)) continue;
+            if (($match[2] ?? '') !== '' && strcasecmp($match[2], $bot) !== 0) continue;
+            $chat = (string)$message['chat']['id']; $username = strtolower($message['from']['username']); $active = $match[1] === 'start' ? 1 : 0;
+            // One current private account per allowed handle; never infer identities from a public chat.
+            if ($active) mahara_query('UPDATE order_telegram_subscribers SET active=0,updated_at=? WHERE username=? AND chat_id<>?', [time(), $username, $chat]);
+            mahara_query('INSERT INTO order_telegram_subscribers(chat_id,username,active,updated_at) VALUES(?,?,?,?) ON CONFLICT(chat_id) DO UPDATE SET username=excluded.username,active=excluded.active,updated_at=excluded.updated_at', [$chat, $username, $active, time()]);
+        }
+        mahara_query("INSERT INTO order_telegram_state(name,value) VALUES('update_cursor',?) ON CONFLICT(name) DO UPDATE SET value=excluded.value", [(string)$cursor]);
+        $db->exec('COMMIT');
+    } catch (Throwable $error) { try { $db->exec('ROLLBACK'); } catch (Throwable) {} throw $error; }
 }
 
 function mahara_telegram_schedule(string $id, string $event, string $occurrence = ''): bool {
     if (!in_array($event, ['order_created', 'payment_paid', 'refund_completed', 'order_shipped', 'order_completed', 'order_tracking_updated'], true) || !mahara_telegram_ready()) return false;
     mahara_telegram_schema();
     if (!mahara_query('SELECT id FROM checkout_orders WHERE id=?', [$id])->fetchColumn()) return false;
-    $key = hash('sha256', json_encode([$id, $event, $occurrence], JSON_THROW_ON_ERROR));
-    return mahara_query('INSERT OR IGNORE INTO order_telegram_queue(dedup_key,order_id,event,chat_id,available_at,created_at) VALUES(?,?,?,?,?,?)', [$key, $id, $event, mahara_telegram_config()['chat_id'], time(), time()])->rowCount() === 1;
+    $legacyKey = hash('sha256', json_encode([$id, $event, $occurrence], JSON_THROW_ON_ERROR)); $inserted = 0;
+    foreach (mahara_telegram_subscribers() as $chat) {
+        $key = hash('sha256', json_encode([$legacyKey, $chat], JSON_THROW_ON_ERROR));
+        $inserted += mahara_query('INSERT OR IGNORE INTO order_telegram_queue(dedup_key,order_id,event,chat_id,available_at,created_at) SELECT ?,?,?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM order_telegram_queue WHERE dedup_key=? AND chat_id=?)', [$key, $id, $event, $chat, time(), time(), $legacyKey, $chat])->rowCount();
+    }
+    return $inserted > 0;
 }
 
 function mahara_telegram_text(mixed $value, int $length): string {
@@ -121,25 +187,24 @@ function mahara_telegram_message(array $job, array $row): string {
     return $text . $details . $footer;
 }
 
-function mahara_telegram_send(string $chatId, string $text): array {
-    if (!mahara_telegram_chat_valid($chatId) || $text === '' || strlen($text) > 4096) throw new MaharaTelegramDeliveryError();
-    $payload = ['chat_id' => $chatId, 'text' => $text, 'link_preview_options' => ['is_disabled' => true]];
+function mahara_telegram_request(string $method, array $payload): array {
+    if (!in_array($method, ['sendMessage', 'getUpdates'], true)) throw new MaharaTelegramDeliveryError();
     try {
         if (defined('MAHARA_LIBRARY_ONLY') && is_callable($GLOBALS['mahara_telegram_test_transport'] ?? null)) {
-            $response = ($GLOBALS['mahara_telegram_test_transport'])('sendMessage', $payload);
+            $response = ($GLOBALS['mahara_telegram_test_transport'])($method, $payload);
         } else {
             $token = mahara_telegram_secrets()['token'] ?? '';
             if (!is_string($token) || !preg_match('/^[0-9]{5,20}:[A-Za-z0-9_-]{20,128}$/D', $token) || !function_exists('curl_init')) throw new MaharaTelegramDeliveryError();
-            $body = ''; $tooLarge = false;
-            $curl = curl_init('https://api.telegram.org/bot' . $token . '/sendMessage');
+            $body = ''; $tooLarge = false; $maximumBytes = $method === 'getUpdates' ? 4194304 : 65536;
+            $curl = curl_init('https://api.telegram.org/bot' . $token . '/' . $method);
             if ($curl === false) throw new MaharaTelegramDeliveryError();
             try {
                 curl_setopt_array($curl, [CURLOPT_POST => true, CURLOPT_POSTFIELDS => json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
                     CURLOPT_HTTPHEADER => ['Content-Type: application/json'], CURLOPT_CONNECTTIMEOUT => 3, CURLOPT_TIMEOUT => 8,
                     CURLOPT_FOLLOWLOCATION => false, CURLOPT_MAXREDIRS => 0, CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
                     CURLOPT_SSL_VERIFYPEER => true, CURLOPT_SSL_VERIFYHOST => 2, CURLOPT_SSLVERSION => CURL_SSLVERSION_TLSv1_2,
-                    CURLOPT_WRITEFUNCTION => static function ($handle, string $chunk) use (&$body, &$tooLarge): int {
-                        if (strlen($body) + strlen($chunk) > 65536) { $tooLarge = true; return 0; }
+                    CURLOPT_WRITEFUNCTION => static function ($handle, string $chunk) use (&$body, &$tooLarge, $maximumBytes): int {
+                        if (strlen($body) + strlen($chunk) > $maximumBytes) { $tooLarge = true; return 0; }
                         $body .= $chunk; return strlen($chunk);
                     }]);
                 $ok = @curl_exec($curl); $status = (int)curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
@@ -148,25 +213,37 @@ function mahara_telegram_send(string $chatId, string $text): array {
             $response = json_decode($body, true, 32, JSON_THROW_ON_ERROR);
             if ($status === 429 && ($response['ok'] ?? null) !== false) throw new MaharaTelegramDeliveryError();
         }
-        if (!is_array($response) || ($response['ok'] ?? null) !== true || !is_int($response['result']['message_id'] ?? null) || $response['result']['message_id'] <= 0) {
+        if (!is_array($response) || ($response['ok'] ?? null) !== true || !is_array($response['result'] ?? null)) {
             $wait = is_array($response) && ($response['error_code'] ?? null) === 429 ? ($response['parameters']['retry_after'] ?? 0) : 0;
             throw new MaharaTelegramDeliveryError(is_int($wait) ? max(0, min(604800, $wait)) : 0);
         }
-        return ['message_id' => $response['result']['message_id']];
+        return $response['result'];
     } catch (MaharaTelegramDeliveryError $error) { throw $error; }
     catch (Throwable) { throw new MaharaTelegramDeliveryError(); }
+}
+
+function mahara_telegram_send(string $chatId, string $text): array {
+    if (!mahara_telegram_chat_valid($chatId) || $text === '' || strlen($text) > 4096) throw new MaharaTelegramDeliveryError();
+    $result = mahara_telegram_request('sendMessage', ['chat_id' => $chatId, 'text' => $text, 'link_preview_options' => ['is_disabled' => true]]);
+    if (!is_int($result['message_id'] ?? null) || $result['message_id'] <= 0) throw new MaharaTelegramDeliveryError();
+    return ['message_id' => $result['message_id']];
 }
 
 function mahara_telegram_work(int $limit = 3): array {
     if (!mahara_telegram_ready()) return ['enabled' => false, 'sent' => 0, 'failed' => 0];
     mahara_telegram_schema();
-    $chatId = mahara_telegram_config()['chat_id']; $sent = 0; $failed = 0;
-    mahara_query("UPDATE order_telegram_queue SET status='failed',lease=NULL WHERE chat_id=? AND status='sending' AND available_at<=? AND attempts>=8", [$chatId, time()]);
+    mahara_telegram_subscribers();
+    try { mahara_telegram_poll(); }
+    catch (Throwable) { error_log('MAHARA Telegram subscription polling failed.'); }
+    $sent = 0; $failed = 0;
+    mahara_query("UPDATE order_telegram_queue SET status='failed',lease=NULL WHERE status='sending' AND available_at<=? AND attempts>=8", [time()]);
     for ($i = 0; $i < max(1, min(20, $limit)); $i++) {
+        $subscribers = mahara_telegram_subscribers();
+        if ($subscribers === []) break;
         $db = mahara_db(); $db->exec('BEGIN IMMEDIATE');
         try {
-            // A configuration change never silently forwards older jobs to a new chat.
-            $job = mahara_query("SELECT * FROM order_telegram_queue WHERE chat_id=? AND status IN ('pending','sending') AND available_at<=? AND attempts<8 ORDER BY id LIMIT 1", [$chatId, time()])->fetch();
+            $marks = implode(',', array_fill(0, count($subscribers), '?'));
+            $job = mahara_query("SELECT q.* FROM order_telegram_queue q JOIN order_telegram_subscribers s ON s.chat_id=q.chat_id AND s.active=1 WHERE q.chat_id IN ($marks) AND q.status IN ('pending','sending') AND q.available_at<=? AND q.attempts<8 ORDER BY q.id LIMIT 1", [...$subscribers, time()])->fetch();
             if (!$job) { $db->exec('COMMIT'); break; }
             $lease = mahara_random_token();
             mahara_query("UPDATE order_telegram_queue SET status='sending',lease=?,attempts=attempts+1,available_at=? WHERE id=?", [$lease, time() + 600, $job['id']]);

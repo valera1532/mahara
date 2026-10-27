@@ -74,6 +74,12 @@ return [
     ],
     // Owner alerts only. Store the token outside the web root in
     // data_dir/telegram-secrets.php -> ['token'=>'...'], readable only by the owner.
-    // The recipient must first start the bot; use the verified numeric chat ID.
-    'telegram' => ['enabled' => false, 'chat_id' => ''],
+    // Only these owner usernames may subscribe with /start; /stop unsubscribes.
+    // chat_id optionally seeds an existing verified owner once.
+    'telegram' => [
+        'enabled' => false,
+        'chat_id' => '',
+        'bot_username' => 'YourShop_bot',
+        'allowed_usernames' => ['owner_username'],
+    ],
 ];

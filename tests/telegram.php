@@ -16,7 +16,7 @@ if (($argv[1] ?? '') !== '--worker') {
     } finally {
         $resolved = realpath($directory); $temporaryRoot = realpath(sys_get_temp_dir());
         if ($resolved === false || $temporaryRoot === false || dirname($resolved) !== $temporaryRoot || !str_starts_with(basename($resolved), 'mahara-telegram-')) throw new RuntimeException('Unsafe Telegram fixture cleanup.');
-        foreach (['mahara.sqlite', 'mahara.sqlite-wal', 'mahara.sqlite-shm', 'telegram-secrets.php', 'unexpected-secret-read'] as $name) {
+        foreach (['mahara.sqlite', 'mahara.sqlite-wal', 'mahara.sqlite-shm', 'telegram-secrets.php', 'unexpected-secret-read', 'telegram-poll.log'] as $name) {
             $file = $resolved . DIRECTORY_SEPARATOR . $name;
             if (is_file($file) && !is_link($file)) unlink($file);
         }
@@ -52,7 +52,8 @@ function telegram_verify(bool $condition, string $message): void {
     if (!$condition) throw new RuntimeException($message);
 }
 function telegram_job(string $occurrence): array {
-    $key = hash('sha256', json_encode(['fixture-order-1', 'order_tracking_updated', $occurrence], JSON_THROW_ON_ERROR));
+    $legacyKey = hash('sha256', json_encode(['fixture-order-1', 'order_tracking_updated', $occurrence], JSON_THROW_ON_ERROR));
+    $key = hash('sha256', json_encode([$legacyKey, '-10012345'], JSON_THROW_ON_ERROR));
     return mahara_query('SELECT * FROM order_telegram_queue WHERE dedup_key=?', [$key])->fetch();
 }
 function telegram_state(): array {
@@ -75,7 +76,7 @@ $GLOBALS['mahara_telegram_test_transport'] = $transport;
 file_put_contents($directory . '/telegram-secrets.php', '<?php file_put_contents(__DIR__ . "/unexpected-secret-read", "read"); throw new RuntimeException("Private fixture credentials must not be loaded.");');
 
 telegram_verify(mahara_config()['data_dir'] === $directory, 'Tests use a complete isolated application configuration.');
-telegram_verify(mahara_telegram_config() === ['enabled' => false, 'chat_id' => ''], 'Telegram fixture configuration completely replaces application Telegram settings.');
+telegram_verify(mahara_telegram_config() === ['enabled' => false, 'chat_id' => '', 'allowed_usernames' => [], 'bot_username' => 'MaharaRussia_bot'], 'Telegram fixture configuration completely replaces application Telegram settings.');
 telegram_verify(!mahara_telegram_ready() && mahara_telegram_work() === ['enabled' => false, 'sent' => 0, 'failed' => 0], 'Disabled Telegram has no worker activity.');
 telegram_verify(!mahara_telegram_schedule('missing', 'payment_paid'), 'Disabled Telegram never enqueues.');
 mahara_telegram_schema(); mahara_notifications_schema();
@@ -214,4 +215,71 @@ telegram_verify(!file_exists($directory . '/unexpected-secret-read'), 'Fake tran
 telegram_verify(telegram_state() === $unchanged, 'Notifications do not change orders, inventory, reservations or refund records.');
 $queue = json_encode(mahara_query('SELECT * FROM order_telegram_queue')->fetchAll(), JSON_THROW_ON_ERROR);
 telegram_verify(!str_contains($queue, 'PRIVATE-') && !str_contains($queue, 'TOKEN') && !str_contains($queue, 'example.test'), 'The durable queue stores no message bodies, customer contacts or credentials.');
+
+// Subscription polling uses the same fake transport and never runs while enqueuing.
+mahara_query('DELETE FROM order_telegram_subscribers');
+mahara_query("DELETE FROM order_telegram_state WHERE name IN ('legacy_seeded','update_cursor')");
+$GLOBALS['mahara_telegram_test_config'] = ['enabled' => true, 'chat_id' => '10101', 'allowed_usernames' => ['Valerooonn1532', 'serg_kharakhorin'], 'bot_username' => 'MaharaRussia_bot'];
+$updates = []; $polls = []; $pollFailure = false;
+$makeUpdate = static fn(int $number, int $chat, string $username, string $text, array $changes = []): array => ['update_id' => $number, 'message' => array_replace_recursive(['chat' => ['id' => $chat, 'type' => 'private'], 'from' => ['id' => $chat, 'username' => $username, 'is_bot' => false], 'text' => $text], $changes)];
+$GLOBALS['mahara_telegram_test_transport'] = static function (string $method, array $payload) use (&$updates, &$polls, &$pollFailure, $transport): array {
+    if ($method !== 'getUpdates') return $transport($method, $payload);
+    $polls[] = $payload;
+    telegram_verify($payload['timeout'] === 0 && $payload['limit'] === 100 && $payload['allowed_updates'] === ['message'], 'Subscription polling is bounded and reads message updates only.');
+    telegram_verify(!mahara_db()->inTransaction(), 'Subscription polling runs outside database write transactions.');
+    if ($pollFailure) throw new RuntimeException('Private polling failure: FAKE_TOKEN provider response');
+    return ['ok' => true, 'result' => $updates];
+};
+telegram_verify(mahara_telegram_subscribers() === ['10101'], 'The approved legacy chat is seeded once for compatibility.');
+$legacyKey = hash('sha256', json_encode([$id, 'payment_paid', ''], JSON_THROW_ON_ERROR));
+mahara_query("INSERT INTO order_telegram_queue(dedup_key,order_id,event,chat_id,status,available_at,created_at,sent_at) VALUES(?,?,?,?,'sent',?,?,?)", [$legacyKey, $id, 'payment_paid', '10101', time(), time(), time()]);
+$updates = [
+    $makeUpdate(0, 10101, 'VALEROOONN1532', '/start'),
+    $makeUpdate(1, 20202, 'serg_kharakhorin', '/start@MaharaRussia_bot binding-code'),
+    $makeUpdate(2, 30303, 'unknown_visitor', '/start'),
+    $makeUpdate(3, 40404, 'serg_kharakhorin', '/start', ['chat' => ['type' => 'group']]),
+    $makeUpdate(4, 50505, 'serg_kharakhorin', '/start', ['from' => ['id' => 99999]]),
+    $makeUpdate(5, 60606, 'serg_kharakhorin', '/start', ['from' => ['is_bot' => true]]),
+    $makeUpdate(6, 70707, 'serg_kharakhorin', '/start@Another_test_bot'),
+];
+$before = count($messages);
+telegram_verify(mahara_telegram_work(20)['sent'] === 0 && count($messages) === $before, 'Polling subscriptions sends no acknowledgements or historical orders.');
+telegram_verify(mahara_telegram_subscribers() === ['10101', '20202'], 'Only private, non-bot allowlisted owners with matching sender/chat IDs subscribe.');
+telegram_verify((int)mahara_query('SELECT COUNT(*) FROM order_telegram_subscribers')->fetchColumn() === 2, 'Unknown users and invalid chats are not stored as subscribers.');
+telegram_verify(mahara_query("SELECT value FROM order_telegram_state WHERE name='update_cursor'")->fetchColumn() === '6' && $polls[0]['offset'] === 0, 'The persistent cursor advances across accepted and ignored updates.');
+$pollCount = count($polls);
+telegram_verify(mahara_telegram_schedule($id, 'payment_paid') && !mahara_telegram_schedule($id, 'payment_paid') && count($polls) === $pollCount, 'Fanout enqueues without network and preserves old per-chat sent deduplication.');
+telegram_verify(mahara_telegram_work(20)['sent'] === 1 && end($messages)['chat_id'] === '20202', 'Only the newly subscribed owner receives an explicitly backfilled event.');
+telegram_verify(end($polls)['offset'] === 7 && (int)mahara_query('SELECT COUNT(*) FROM order_telegram_subscribers')->fetchColumn() === 2, 'Repeated old updates cannot duplicate subscriptions.');
+$updates = [];
+telegram_verify(mahara_telegram_schedule($id, 'order_tracking_updated', 'both-owners'), 'A new event fans out to both active owners.');
+$before = count($messages);
+telegram_verify(mahara_telegram_work(20)['sent'] === 2 && array_column(array_slice($messages, $before), 'chat_id') === ['10101', '20202'], 'A new owner alert is delivered once to each subscribed owner.');
+telegram_verify(!mahara_telegram_schedule($id, 'order_tracking_updated', 'both-owners'), 'Fanout deduplication survives successful delivery.');
+
+mahara_telegram_schedule($id, 'order_tracking_updated', 'stop-before-delivery');
+$updates = [$makeUpdate(7, 10101, 'Valerooonn1532', '/stop'), $makeUpdate(8, 20202, 'serg_kharakhorin', '/stop@MaharaRussia_bot')];
+$before = count($messages);
+telegram_verify(mahara_telegram_work(20)['sent'] === 0 && count($messages) === $before && mahara_telegram_subscribers() === [], 'Stop commands disable both owners before pending jobs can be delivered.');
+$updates = [];
+telegram_verify(mahara_telegram_work(20)['sent'] === 0 && !mahara_telegram_schedule($id, 'order_tracking_updated', 'while-stopped') && mahara_telegram_subscribers() === [], 'The legacy config does not re-enable a stopped owner or enqueue to stopped chats.');
+$updates = [$makeUpdate(9, 20202, 'SERG_KHARAKHORIN', '/start')];
+telegram_verify(mahara_telegram_work(20)['sent'] === 1 && end($messages)['chat_id'] === '20202' && mahara_telegram_subscribers() === ['20202'], 'An explicit new Start resumes only that owner, preserving the other owner stop.');
+$GLOBALS['mahara_telegram_test_config']['chat_id'] = '';
+telegram_verify(mahara_telegram_ready(), 'An allowlisted subscription setup does not require a legacy chat ID.');
+$updates = []; $pollFailure = true;
+mahara_telegram_schedule($id, 'order_tracking_updated', 'poll-unavailable');
+$cursor = mahara_query("SELECT value FROM order_telegram_state WHERE name='update_cursor'")->fetchColumn();
+$previousLog = ini_get('error_log'); ini_set('error_log', $directory . '/telegram-poll.log');
+try { $summary = mahara_telegram_work(20); }
+finally { ini_set('error_log', (string)$previousLog); }
+telegram_verify($summary['sent'] === 1 && end($messages)['chat_id'] === '20202' && mahara_query("SELECT value FROM order_telegram_state WHERE name='update_cursor'")->fetchColumn() === $cursor, 'Polling failure preserves the cursor and does not block existing owner deliveries.');
+$log = file_get_contents($directory . '/telegram-poll.log');
+telegram_verify(str_contains($log, 'MAHARA Telegram subscription polling failed.') && !str_contains($log, 'TOKEN') && !str_contains($log, 'provider response'), 'Polling errors expose only a fixed diagnostic without tokens or provider data.');
+$pollFailure = false;
+$GLOBALS['mahara_telegram_test_config']['allowed_usernames'] = ['Valerooonn1532'];
+telegram_verify(mahara_telegram_subscribers() === [], 'Removing a username from the allowlist stops its deliveries.');
+$subscriptionState = json_encode(mahara_query('SELECT * FROM order_telegram_subscribers')->fetchAll(), JSON_THROW_ON_ERROR);
+telegram_verify(!str_contains($subscriptionState, 'PRIVATE-') && !str_contains($subscriptionState, 'unknown_visitor') && !str_contains($subscriptionState, 'binding-code'), 'Subscription storage contains only necessary authorized identity and status metadata.');
+telegram_verify(telegram_state() === $unchanged && !file_exists($directory . '/unexpected-secret-read'), 'Subscription processing leaves orders intact and never reads private fixture credentials.');
 echo 'PASS: ' . $checks . " Telegram checks; isolated database and fake transport only.\n";
